@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThinkingdataAnalytics", "ThinkingdataAnalytics\ThinkingdataAnalytics.csproj", "{246F6C13-A07C-43A8-8E93-4CFECEA2339A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThinkingdataAnalyticsTest", "ThinkingdataAnalyticsTest\ThinkingdataAnalyticsTest.csproj", "{01DD06D1-6694-4FE7-8C2A-4FC64BAF476C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{246F6C13-A07C-43A8-8E93-4CFECEA2339A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{246F6C13-A07C-43A8-8E93-4CFECEA2339A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{246F6C13-A07C-43A8-8E93-4CFECEA2339A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{246F6C13-A07C-43A8-8E93-4CFECEA2339A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{01DD06D1-6694-4FE7-8C2A-4FC64BAF476C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{01DD06D1-6694-4FE7-8C2A-4FC64BAF476C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{01DD06D1-6694-4FE7-8C2A-4FC64BAF476C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{01DD06D1-6694-4FE7-8C2A-4FC64BAF476C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
