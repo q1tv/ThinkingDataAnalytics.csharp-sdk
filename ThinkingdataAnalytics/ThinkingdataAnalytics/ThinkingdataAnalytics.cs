@@ -1,14 +1,13 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ThinkingData.Analytics
 {
     public class ThinkingdataAnalytics
     {
-        private static readonly String LIB_VERSION = "1.1.0";
+        private static readonly String LIB_VERSION = "1.2.0";
         private static readonly String LIB_NAME = "tga_csharp_sdk";
 
         private static readonly Regex KEY_PATTERN =
@@ -86,6 +85,23 @@ namespace ThinkingData.Analytics
         {
             _Add(account_id, distinct_id, "user_set", properties);
         }
+        
+        /*
+        * 删除用户属性
+        * @param account_id 账号 ID
+        * @param distinct_id 访客 ID
+        * @param properties 用户属性
+        */
+        public void UserUnSet(String account_id, String distinct_id, List<string> properties)
+        {
+            Dictionary<String, Object> props = new Dictionary<String, Object>();
+            foreach (String property in properties)
+            {
+                props.Add(property, 0);
+            }
+           
+            _Add(account_id, distinct_id, "user_unset", props);
+        }
 
         /**
           * 设置用户属性，首次设置用户的属性,如果该属性已经存在,该操作为无效.
@@ -127,6 +143,17 @@ namespace ThinkingData.Analytics
             Dictionary<String, Object> properties = new Dictionary<String, Object>();
             properties.Add(property, value);
             _Add(account_id, distinct_id, "user_add", properties);
+        }
+        
+        /*
+          * 追加用户的集合类型的一个或多个属性
+          * @param	account_id	账号ID
+          * @param	distinct_id	匿名ID
+          * @param	properties	增加的用户属性
+         */
+        public void UserAppend(String account_id, String distinct_id, Dictionary<String, Object> properties)
+        {
+            _Add(account_id, distinct_id, "user_append", properties);
         }
 
         /**
@@ -199,10 +226,24 @@ namespace ThinkingData.Analytics
 
                 AssertKeyWithRegex("property", kvp.Key);
 
-                if (!this.IsNumber(value) && !(value is string) && !(value is DateTime) && !(value is bool))
+                if (!this.IsNumber(value) && !(value is string) && !(value is DateTime) && !(value is bool) && !(value is IList))
                 {
                     throw new ArgumentException(
-                        "The supported data type including: Number, String, Date, Boolean. Invalid property: " + key);
+                        $"The supported data type including: Number, String, Date, Boolean,List. Invalid property: {key}");
+                }
+
+                if (value is List<object>)
+                {
+                    
+                    List<object> list = value as List<object>;
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        if (list[i] is DateTime)
+                        {
+                            list[i] = (DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss.fff");
+                        }
+                        
+                    }
                 }
 
                 if (type == "user_add" && !this.IsNumber(value))
@@ -230,8 +271,6 @@ namespace ThinkingData.Analytics
                 throw new SystemException("account_id or distinct_id must be provided. ");
             }
 
-            AssertProperties(type, properties);
-
             if (type.Equals("track"))
             {
                 AssertKey("eventName", event_name);
@@ -254,16 +293,20 @@ namespace ThinkingData.Analytics
             {
                 evt.Add("#event_name", event_name);
             }
-
+            
+            //#uuid 只支持UUID标准格式xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+            if (properties != null && properties.ContainsKey("#uuid"))
+            {
+                evt.Add("#uuid", properties["#uuid"]);
+                properties.Remove("#uuid");
+            }
+            
+            AssertProperties(type, properties);
             if (properties != null && properties.ContainsKey("#ip"))
             {
                 evt.Add("#ip", properties["#ip"]);
                 properties.Remove("#ip");
-            }
-            else
-            {
-                evt.Add("#ip", "");
-            }
+            }           
 
             if (type.Equals("track"))
             {

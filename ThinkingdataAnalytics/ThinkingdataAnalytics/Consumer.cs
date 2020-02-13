@@ -5,9 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Collections.Generic;
 using System.Web.Script.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.IO.Compression;
-using System.Web;
 
 namespace ThinkingData.Analytics
 {
@@ -44,7 +42,11 @@ namespace ThinkingData.Analytics
         {
         }
 
-
+        public LoggerConsumer(String logDirectory, int fileSize) : this(logDirectory, RotateMode.DAILY, fileSize)
+        {
+        }
+        
+        // 默认情况下不限制文件大小 fileSize = 0
         public LoggerConsumer(String logDirectory, RotateMode rotateHourly) : this(logDirectory, rotateHourly, 0)
         {
         }
@@ -118,7 +120,7 @@ namespace ThinkingData.Analytics
             int count = 0;
             String file_complete = file_base + count;
             FileInfo target = new FileInfo(file_complete);
-            if (this.fileSize != 0)
+            if (this.fileSize > 0)
             {
                 while (File.Exists(file_complete) && fileSizeOut(target))
                 {
@@ -238,35 +240,50 @@ namespace ThinkingData.Analytics
         private readonly JavaScriptSerializer js;
 
 
-        private readonly String serverUrl;
+        private readonly String url;
         private readonly String appId;
         private readonly int batchSize;
         private readonly int requestTimeoutMillisecond;
         private readonly bool throwException;
+        private readonly bool compress;
 
-        public BatchConsumer(string serverUrl, String appId) : this(serverUrl, appId, MAX_FLUSH_BATCH_SIZE)
+        public BatchConsumer(string serverUrl, string appId) : this(serverUrl, appId,MAX_FLUSH_BATCH_SIZE, DEFAULT_TIME_OUT_SECOND,false,true)
+        {
+        }
+        
+        /**
+         * 数据是否需要压缩，compress 内网可设置 false
+         */
+        public BatchConsumer(string serverUrl, string appId,bool compress) : this(serverUrl, appId,MAX_FLUSH_BATCH_SIZE, DEFAULT_TIME_OUT_SECOND,false,compress)
+        {
+        }
+        /**
+         * batchSize 每次flush到TA的数据条数，默认20条
+         */
+
+        public BatchConsumer(string serverUrl, string appId, int batchSize) : this(serverUrl, appId, batchSize,DEFAULT_TIME_OUT_SECOND)
         {
         }
 
-        public BatchConsumer(String serverUrl, String appId, int batchSize) : this(serverUrl, appId, batchSize,
-            DEFAULT_TIME_OUT_SECOND)
+        /**
+         * batchSize 每次flush到TA的数据条数，默认20条
+         * requestTimeoutSecond 发送服务器请求时间设置，默认30s
+         */
+        public BatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond) : this(serverUrl,
+            appId, batchSize, requestTimeoutSecond, false,true)
         {
         }
-
-        public BatchConsumer(String serverUrl, String appId, int batchSize, int requestTimeoutSecond) : this(serverUrl,
-            appId, batchSize, requestTimeoutSecond, false)
-        {
-        }
-
-        public BatchConsumer(string serverUrl, String appId, int batchSize, int requestTimeoutSecond,
-            bool throwException)
+        
+        public BatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond, bool throwException,bool compress = true)
         {
             messageList = new List<Dictionary<string, object>>();
             js = new JavaScriptSerializer();
-            this.serverUrl = serverUrl;
+            Uri relativeUri = new Uri("/sync_server", UriKind.Relative);
+            url = new Uri(new Uri(serverUrl), relativeUri).AbsoluteUri;
             this.appId = appId;
             this.batchSize = Math.Min(MAX_FLUSH_BATCH_SIZE, batchSize);
             this.throwException = throwException;
+            this.compress = compress;
             this.requestTimeoutMillisecond = requestTimeoutSecond * 1000;
         }
 
@@ -328,22 +345,30 @@ namespace ThinkingData.Analytics
         {
             try
             {
-                string dataList = GzipAndBase64(dataStr);
-                HttpWebRequest request = (HttpWebRequest) WebRequest.Create(serverUrl);
+                byte[] dataBytes =Encoding.UTF8.GetBytes(dataStr);
+                byte[] dataCompressed = null;
+                if (this.compress)
+                {
+                    dataCompressed = Gzip(dataStr);
+                }
+                else
+                {
+                    dataCompressed = dataBytes;
+                }
+                
+                HttpWebRequest request = (HttpWebRequest) WebRequest.Create(this.url);
                 request.Method = "POST";
                 request.ReadWriteTimeout = requestTimeoutMillisecond;
                 request.Timeout = requestTimeoutMillisecond;
                 request.UserAgent = "C# SDK";
                 request.Headers.Set("appid", this.appId);
-                byte[] data = Encoding.UTF8.GetBytes(dataList);
+                request.Headers.Set("compress",this.compress ? "gzip" : "none");
                 using (Stream stream = request.GetRequestStream())
                 {
-                    stream.Write(data, 0, data.Length);
+                    stream.Write(dataCompressed, 0, dataCompressed.Length);
                 }
 
                 HttpWebResponse response = (HttpWebResponse) request.GetResponse();
-
-                HttpStatusCode responseStatusCode = response.StatusCode;
 
                 var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
 
@@ -352,9 +377,8 @@ namespace ThinkingData.Analytics
                 {
                     throw new SystemException("C# SDK send response is not 200, content: " + responseString);
                 }
-
-                Dictionary<string, object> resultJson =
-                    (Dictionary<string, object>) js.DeserializeObject(responseString);
+                response.Close();
+                Dictionary<string,object> resultJson = (Dictionary<string, object>)js.DeserializeObject(responseString);
 
                 int code = (int) resultJson["code"];
 
@@ -389,19 +413,19 @@ namespace ThinkingData.Analytics
             }
             catch (Exception e)
             {
-                Console.WriteLine(e + "\n  Cannot post message to " + this.serverUrl);
+                Console.WriteLine(e + "\n  Cannot post message to " + this.url);
                 throw;
             }
         }
 
-        private string GzipAndBase64(string inputStr)
+        private byte[] Gzip(string inputStr)
         {
             byte[] inputBytes = Encoding.UTF8.GetBytes(inputStr);
             using (var outputStream = new MemoryStream())
             {
                 using (var gzipStream = new GZipStream(outputStream, CompressionMode.Compress))
                     gzipStream.Write(inputBytes, 0, inputBytes.Length);
-                return Convert.ToBase64String(outputStream.ToArray());
+                return outputStream.ToArray();
             }
         }
 
@@ -415,20 +439,27 @@ namespace ThinkingData.Analytics
     public class DebugConsumer : IConsumer
     {
         private readonly string url;
-        private readonly String appId;
+        private readonly string appId;
         private readonly int requestTimeout = 30000;
         private readonly JavaScriptSerializer js;
+        private readonly bool writeData;
 
-        public DebugConsumer(string serverUrl, String appId) : this(serverUrl, appId, 30000)
+        public DebugConsumer(string serverUrl, string appId) : this(serverUrl, appId, 30000)
         {
         }
 
-        public DebugConsumer(string serverUrl, String appId, int requestTimeout)
+        public DebugConsumer(string serverUrl, string appId, bool writeData):this(serverUrl,appId,30000,writeData)
+        {   
+        }
+
+        public DebugConsumer(string serverUrl, String appId, int requestTimeout,bool writeData = true)
         {
-            url = serverUrl.Replace("logagent", "sync_data");
+            Uri relativeUri = new Uri("/data_debug", UriKind.Relative);
+            url = new Uri(new Uri(serverUrl), relativeUri).AbsoluteUri;
             js = new JavaScriptSerializer();
             this.appId = appId;
             this.requestTimeout = requestTimeout;
+            this.writeData = writeData;
         }
 
         public void Send(Dictionary<string, Object> message)
@@ -456,8 +487,13 @@ namespace ThinkingData.Analytics
 
                 req.ContentType = "application/x-www-form-urlencoded";
 
+                int dryRun = 1;
+                if (this.writeData)
+                {
+                    dryRun = 0;
+                }
 
-                var postData = "appid=" + this.appId + "&debug=1&data=" + dataStr;
+                var postData = "appid=" + this.appId + "&source=server&dryRun="+dryRun+"&data=" + dataStr;
 
 
                 byte[] data = Encoding.UTF8.GetBytes(postData);
@@ -472,8 +508,6 @@ namespace ThinkingData.Analytics
                 }
 
                 HttpWebResponse response = (HttpWebResponse) req.GetResponse();
-                HttpStatusCode responseStatusCode = response.StatusCode;
-
 
                 var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
 
@@ -481,38 +515,14 @@ namespace ThinkingData.Analytics
                 {
                     throw new SystemException("C# SDK send response is not 200, content: " + responseString);
                 }
+                response.Close();
+                Dictionary<string,object> resultJson = (Dictionary<string, object>)js.DeserializeObject(responseString);
 
-                Dictionary<string, object> resultJson =
-                    (Dictionary<string, object>) js.DeserializeObject(responseString);
+                 int errorLevel = (int) resultJson["errorLevel"];
 
-                int code = (int) resultJson["code"];
-
-                if (code != 0)
+                if (errorLevel != 0)
                 {
-                    if (code == -1)
-                    {
-                        throw new SystemException("error msg:" +
-                                                  (resultJson.ContainsKey("msg")
-                                                      ? resultJson["msg"]
-                                                      : "invalid data format"));
-                    }
-                    else if (code == -2)
-                    {
-                        throw new SystemException("error msg:" +
-                                                  (resultJson.ContainsKey("msg")
-                                                      ? resultJson["msg"]
-                                                      : "APP ID doesn't exist"));
-                    }
-                    else if (code == -3)
-                    {
-                        throw new SystemException("error msg:" + (resultJson.ContainsKey("msg")
-                                                      ? resultJson["msg"]
-                                                      : "invalid ip transmission"));
-                    }
-                    else
-                    {
-                        throw new SystemException("Unexpected response return code: " + code);
-                    }
+                   throw new Exception("\n Can't send because :\n"+responseString);
                 }
             }
             catch (Exception e)
@@ -520,19 +530,7 @@ namespace ThinkingData.Analytics
                 throw new SystemException(e + "\n Cannot post message to " + this.url);
             }
         }
-
-        private string GzipAndBase64(string inputStr)
-        {
-            byte[] inputBytes = Encoding.UTF8.GetBytes(inputStr);
-            using (var outputStream = new MemoryStream())
-            {
-                using (var gzipStream = new GZipStream(outputStream, CompressionMode.Compress))
-                    gzipStream.Write(inputBytes, 0, inputBytes.Length);
-                return Convert.ToBase64String(outputStream.ToArray());
-            }
-        }
-
-
+        
         public void Flush()
         {
         }
