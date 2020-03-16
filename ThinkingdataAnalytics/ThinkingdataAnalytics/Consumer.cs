@@ -223,6 +223,7 @@ namespace ThinkingData.Analytics
                     outputStream.Seek(0, SeekOrigin.End);
                     byte[] bytes = Encoding.UTF8.GetBytes(data.ToString());
                     outputStream.Write(bytes, 0, bytes.Length);
+                    outputStream.Flush();
                     mutex.ReleaseMutex();
                 }
 
@@ -366,6 +367,7 @@ namespace ThinkingData.Analytics
                 using (Stream stream = request.GetRequestStream())
                 {
                     stream.Write(dataCompressed, 0, dataCompressed.Length);
+                    stream.Flush();
                 }
 
                 HttpWebResponse response = (HttpWebResponse) request.GetResponse();

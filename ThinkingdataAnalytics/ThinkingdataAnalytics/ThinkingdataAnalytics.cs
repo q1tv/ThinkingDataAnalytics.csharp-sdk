@@ -7,7 +7,7 @@ namespace ThinkingData.Analytics
 {
     public class ThinkingdataAnalytics
     {
-        private static readonly String LIB_VERSION = "1.2.0";
+        private static readonly String LIB_VERSION = "1.2.1";
         private static readonly String LIB_NAME = "tga_csharp_sdk";
 
         private static readonly Regex KEY_PATTERN =
@@ -229,7 +229,7 @@ namespace ThinkingData.Analytics
                 if (!this.IsNumber(value) && !(value is string) && !(value is DateTime) && !(value is bool) && !(value is IList))
                 {
                     throw new ArgumentException(
-                        $"The supported data type including: Number, String, Date, Boolean,List. Invalid property: {key}");
+                        "The supported data type including: Number, String, Date, Boolean,List. Invalid property: {key}");
                 }
 
                 if (value is List<object>)
