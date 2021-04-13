@@ -9,7 +9,8 @@ namespace ThinkingdataAnalyticsTest
         static void Main(string[] args)
         {
             //LoggerConsumer,结合logbus使用，推荐这个
-            ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/")); //默认按照天切分，无大小切分，适用于大多的情景
+            ThinkingdataAnalytics
+                ta = new ThinkingdataAnalytics(new LoggerConsumer("/Users/sunzeyu/test/test")); //默认按照天切分，无大小切分，适用于大多的情景
 //           ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/"));
             // ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/",LoggerConsumer.RotateMode.HOURLY));//按小时切分，无大小切分
             //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/", LoggerConsumer.RotateMode.DAILY,5)); //按小时切分,按大小切分，大小单位为MB,等同于new LoggerConsumer("I:/log/logdata/",5)
@@ -17,7 +18,7 @@ namespace ThinkingdataAnalyticsTest
             //BatchConsumer
             //适用于小数量的历史数据使用
             //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new BatchConsumer(你的接受端url,APPID));
-            
+
             //如果是内网传输，可以按以下方式初始化,默认是true
             //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new BatchConsumer(你的接受端url,APPID,false));
 
@@ -39,7 +40,7 @@ namespace ThinkingdataAnalyticsTest
             //刷新数据，立即上报
             ta.Flush(); //如果不调用此函数，LoggerConsumer,默认8k刷新一次;BatchConsumer默认50条发送一次，BatchConsumer可设置批次上报条数
 
-            
+
             Dictionary<string, Object> dic2 = new Dictionary<string, object>();
             dic2.Add("id", 618834);
             dic2.Add("create_date", Convert.ToDateTime("2019-7-8 20:23:22")); //传入datetime类型的
@@ -49,6 +50,11 @@ namespace ThinkingdataAnalyticsTest
             dic2.Add("group_order_is_vip", 3);
             dic2.Add("service_id", 0);
             ta.Track(accountId, distinctId, "testEventName2", dic2); //用户登录后与之前未登录的distinctid,进行绑定，详情可见官网
+
+            ta.TrackUpdate(accountId, distinctId, "updateEventName", "updateEventId", dic2);
+            ta.TrackOverwrite(accountId, distinctId, "overwriteEventName", "overwriteEventId", dic2);
+            dic2.Add("#first_check_id", "first_check_id");
+            ta.Track(accountId, distinctId, "first_check_id", dic2);
             //刷新数据，立即上报
             ta.Flush();
             //传入用户属性
@@ -61,7 +67,7 @@ namespace ThinkingdataAnalyticsTest
             list1.Add("str1");
             list1.Add("str2");
             list1.Add("str3");
-            dic3.Add("arrkey4",list1);
+            dic3.Add("arrkey4", list1);
             ta.UserSet(accountId, distinctId, dic3);
             //刷新数据，立即上报
             ta.Flush();
@@ -92,7 +98,6 @@ namespace ThinkingdataAnalyticsTest
             //刷新数据，立即上报
             ta.Flush();
 
-           
 
             Dictionary<string, Object> dic7 = new Dictionary<string, object>();
             dic7.Add("double1", (double) 1);
@@ -102,17 +107,17 @@ namespace ThinkingdataAnalyticsTest
             List<string> list5 = new List<string>();
             list5.Add("6.66");
             list5.Add("test");
-            dic7.Add("arrkey4",list5);
+            dic7.Add("arrkey4", list5);
             ta.Track(accountId, distinctId, "test", dic7);
-            
+
             //user_append,追加集合属性
             Dictionary<string, object> dictionary = new Dictionary<string, object>();
             List<string> list6 = new List<string>();
             list6.Add("true");
             list6.Add("test");
-            dictionary.Add("arrkey4",list6);
-            ta.UserAppend(accountId,distinctId,dictionary);
-            
+            dictionary.Add("arrkey4", list6);
+            ta.UserAppend(accountId, distinctId, dictionary);
+
             //刷新数据，立即上报
             ta.Flush();
             //ta.UserSet(accountId, distinctId, dic7);
@@ -123,7 +128,6 @@ namespace ThinkingdataAnalyticsTest
             //ta.UserDelete(accountId, distinctId);
             //刷新数据，立即上报
             ta.Flush();
-            
         }
     }
 }

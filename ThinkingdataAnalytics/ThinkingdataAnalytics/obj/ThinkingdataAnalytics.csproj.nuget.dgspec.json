@@ -1,0 +1,44 @@
+{
+  "format": 1,
+  "restore": {
+    "/Users/sunzeyu/Work/Code/github/td/csharp-sdk/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj": {}
+  },
+  "projects": {
+    "/Users/sunzeyu/Work/Code/github/td/csharp-sdk/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/sunzeyu/Work/Code/github/td/csharp-sdk/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj",
+        "projectName": "ThinkingdataAnalytics",
+        "projectPath": "/Users/sunzeyu/Work/Code/github/td/csharp-sdk/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj",
+        "packagesPath": "/Users/sunzeyu/.nuget/packages/",
+        "outputPath": "/Users/sunzeyu/Work/Code/github/td/csharp-sdk/ThinkingdataAnalytics/ThinkingdataAnalytics/obj/",
+        "projectStyle": "PackageReference",
+        "skipContentFileWrite": true,
+        "configFilePaths": [
+          "/Users/sunzeyu/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net40"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net40": {
+            "projectReferences": {}
+          }
+        }
+      },
+      "frameworks": {
+        "net40": {
+          "dependencies": {
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[12.0.3, )"
+            }
+          }
+        }
+      }
+    }
+  }
+}

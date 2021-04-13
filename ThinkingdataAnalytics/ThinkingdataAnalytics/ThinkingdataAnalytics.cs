@@ -1,44 +1,52 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace ThinkingData.Analytics
 {
     public class ThinkingdataAnalytics
     {
-        private static readonly String LIB_VERSION = "1.2.1";
-        private static readonly String LIB_NAME = "tga_csharp_sdk";
+        private const string LibVersion = "1.3.0";
+        private const string LibName = "tga_csharp_sdk";
 
-        private static readonly Regex KEY_PATTERN =
+        private static readonly Regex KeyPattern =
             new Regex("^(#[a-z][a-z0-9_]{0,49})|([a-z][a-z0-9_]{0,50})$", RegexOptions.IgnoreCase);
 
-        private IConsumer consumer;
+        private readonly IConsumer _consumer;
 
-        private Dictionary<String, Object> pubicProperties;
+        private readonly bool _enableUuid;
+
+        private readonly Dictionary<string, object> _pubicProperties;
 
         /*
          * 实例化tga类，接收一个Consumer的一个实例化对象
          * @param consumer	BatchConsumer,LoggerConsumer实例
         */
-        public ThinkingdataAnalytics(IConsumer consumer)
+        public ThinkingdataAnalytics(IConsumer consumer) : this(consumer, false)
         {
-            this.consumer = consumer;
-            this.pubicProperties = new Dictionary<String, Object>();
-            this.ClearPublicProperties();
+        }
+
+        public ThinkingdataAnalytics(IConsumer consumer, bool enableUuid)
+        {
+            _consumer = consumer;
+            _enableUuid = enableUuid;
+            _pubicProperties = new Dictionary<string, object>();
+            ClearPublicProperties();
         }
 
         /*
         * 公共属性只用于track接口，其他接口无效，且每次都会自动向track事件中添加公共属性
         * @param properties	公共属性
         */
-        public void SetPublicProperties(Dictionary<String, Object> properties)
+        public void SetPublicProperties(Dictionary<string, object> properties)
         {
-            lock (this.pubicProperties)
+            lock (_pubicProperties)
             {
-                foreach (KeyValuePair<String, Object> kvp in properties)
+                foreach (var kvp in properties)
                 {
-                    this.pubicProperties[kvp.Key] = kvp.Value;
+                    _pubicProperties[kvp.Key] = kvp.Value;
                 }
             }
         }
@@ -48,18 +56,18 @@ namespace ThinkingData.Analytics
 	     */
         public void ClearPublicProperties()
         {
-            lock (this.pubicProperties)
+            lock (_pubicProperties)
             {
-                this.pubicProperties.Clear();
-                this.pubicProperties.Add("#lib", ThinkingdataAnalytics.LIB_NAME);
-                this.pubicProperties.Add("#lib_version", ThinkingdataAnalytics.LIB_VERSION);
+                _pubicProperties.Clear();
+                _pubicProperties.Add("#lib", LibName);
+                _pubicProperties.Add("#lib_version", LibVersion);
             }
         }
 
         // 记录一个没有任何属性的事件
-        public void Track(String account_id, String distinct_id, String event_name)
+        public void Track(string account_id, string distinct_id, string event_name)
         {
-            _Add(account_id, distinct_id, "track", event_name, null);
+            _Add(account_id, distinct_id, "track", event_name, null, null);
         }
 
         /*
@@ -69,10 +77,63 @@ namespace ThinkingData.Analytics
 	    * @param	event_name	事件名称
 	    * @param	properties	事件属性
 	    */
-        public void Track(String account_id, String distinct_id, String event_name,
-            Dictionary<String, Object> properties)
+        public void Track(string account_id, string distinct_id, string event_name,
+            Dictionary<string, object> properties)
         {
-            _Add(account_id, distinct_id, "track", event_name, properties);
+            if (string.IsNullOrEmpty(event_name))
+            {
+                throw new SystemException("The event name must be provided.");
+            }
+
+            _Add(account_id, distinct_id, "track", event_name, null, properties);
+        }
+
+        /*
+	    * 可更新事件属性
+	    * @param	account_id	账号ID
+	    * @param	distinct_id	匿名ID
+	    * @param	event_name	事件名称
+        * @param    event_id    事件ID
+	    * @param	properties	事件属性
+	    */
+        public void TrackUpdate(string account_id, string distinct_id, string event_name, string event_id,
+            Dictionary<string, object> properties)
+        {
+            if (string.IsNullOrEmpty(event_name))
+            {
+                throw new SystemException("The event name must be provided.");
+            }
+
+            if (string.IsNullOrEmpty(event_id))
+            {
+                throw new SystemException("The event id must be provided.");
+            }
+
+            _Add(account_id, distinct_id, "track_update", event_name, event_id, properties);
+        }
+
+        /*
+	    * 可重写事件属性
+	    * @param	account_id	账号ID
+	    * @param	distinct_id	匿名ID
+	    * @param	event_name	事件名称
+        * @param    event_id    事件ID
+	    * @param	properties	事件属性
+	    */
+        public void TrackOverwrite(string account_id, string distinct_id, string event_name, string event_id,
+            Dictionary<string, object> properties)
+        {
+            if (string.IsNullOrEmpty(event_name))
+            {
+                throw new SystemException("The event name must be provided.");
+            }
+
+            if (string.IsNullOrEmpty(event_id))
+            {
+                throw new SystemException("The event id must be provided.");
+            }
+
+            _Add(account_id, distinct_id, "track_overwrite", event_name, event_id, properties);
         }
 
         /*
@@ -81,25 +142,20 @@ namespace ThinkingData.Analytics
          * @param	distinct_id	匿名ID
          * @param	properties	增加的用户属性
 	     */
-        public void UserSet(String account_id, String distinct_id, Dictionary<String, Object> properties)
+        public void UserSet(string account_id, string distinct_id, Dictionary<string, object> properties)
         {
             _Add(account_id, distinct_id, "user_set", properties);
         }
-        
+
         /*
         * 删除用户属性
         * @param account_id 账号 ID
         * @param distinct_id 访客 ID
         * @param properties 用户属性
         */
-        public void UserUnSet(String account_id, String distinct_id, List<string> properties)
+        public void UserUnSet(string account_id, string distinct_id, List<string> properties)
         {
-            Dictionary<String, Object> props = new Dictionary<String, Object>();
-            foreach (String property in properties)
-            {
-                props.Add(property, 0);
-            }
-           
+            var props = properties.ToDictionary<string, string, object>(property => property, property => 0);
             _Add(account_id, distinct_id, "user_unset", props);
         }
 
@@ -109,7 +165,7 @@ namespace ThinkingData.Analytics
           * @param	distinct_id	匿名ID
           * @param	properties	增加的用户属性
          */
-        public void UserSetOnce(String account_id, String distinct_id, Dictionary<String, Object> properties)
+        public void UserSetOnce(string account_id, string distinct_id, Dictionary<string, object> properties)
         {
             _Add(account_id, distinct_id, "user_setOnce", properties);
         }
@@ -120,10 +176,9 @@ namespace ThinkingData.Analytics
           * @param	distinct_id	匿名ID
           * @param	properties	增加的用户属性
          */
-        public void UserSetOnce(String account_id, String distinct_id, String property, Object value)
+        public void UserSetOnce(string account_id, string distinct_id, string property, object value)
         {
-            Dictionary<String, Object> properties = new Dictionary<String, Object>();
-            properties.Add(property, value);
+            var properties = new Dictionary<string, object> {{property, value}};
             _Add(account_id, distinct_id, "user_setOnce", properties);
         }
 
@@ -133,25 +188,24 @@ namespace ThinkingData.Analytics
           * @param	distinct_id	匿名ID
           * @param	properties	增加的用户属性
          */
-        public void UserAdd(String account_id, String distinct_id, Dictionary<String, Object> properties)
+        public void UserAdd(string account_id, string distinct_id, Dictionary<string, object> properties)
         {
             _Add(account_id, distinct_id, "user_add", properties);
         }
 
-        public void UserAdd(String account_id, String distinct_id, String property, long value)
+        public void UserAdd(string account_id, string distinct_id, string property, long value)
         {
-            Dictionary<String, Object> properties = new Dictionary<String, Object>();
-            properties.Add(property, value);
+            var properties = new Dictionary<string, object> {{property, value}};
             _Add(account_id, distinct_id, "user_add", properties);
         }
-        
+
         /*
           * 追加用户的集合类型的一个或多个属性
           * @param	account_id	账号ID
           * @param	distinct_id	匿名ID
           * @param	properties	增加的用户属性
          */
-        public void UserAppend(String account_id, String distinct_id, Dictionary<String, Object> properties)
+        public void UserAppend(string account_id, string distinct_id, Dictionary<string, object> properties)
         {
             _Add(account_id, distinct_id, "user_append", properties);
         }
@@ -161,124 +215,104 @@ namespace ThinkingData.Analytics
          * @param 	account_id	账号ID
          * @param	distinct_id	匿名ID
         */
-        public void UserDelete(String account_id, String distinct_id)
+        public void UserDelete(string account_id, string distinct_id)
         {
-            _Add(account_id, distinct_id, "user_del", new Dictionary<String, Object>());
+            _Add(account_id, distinct_id, "user_del", new Dictionary<string, object>());
         }
 
         /// 立即发送缓存中的所有日志
         public void Flush()
         {
-            this.consumer.Flush();
+            _consumer.Flush();
         }
 
         //关闭并退出 sdk 所有线程，停止前会清空所有本地数据
         public void Close()
         {
-            this.consumer.Close();
+            _consumer.Close();
         }
 
-        private void AssertKey(String type, String key)
-        {
-            if (key == null || key.Length < 1)
-            {
-                throw new ArgumentNullException("The " + type + " is empty.");
-            }
-
-            if (key.Length > 50)
-            {
-                throw new ArgumentOutOfRangeException("The " + type + " is too long, max length is 50.");
-            }
-        }
-
-        private void AssertKeyWithRegex(String type, String key)
-        {
-            AssertKey(type, key);
-            if (!KEY_PATTERN.IsMatch(key))
-            {
-                throw new ArgumentException("The " + type + "'" + key + "' is invalid.");
-            }
-        }
-
-        private bool IsNumber(Object value)
+        private static bool IsNumber(object value)
         {
             return (value is sbyte) || (value is short) || (value is int) || (value is long) || (value is byte)
                    || (value is ushort) || (value is uint) || (value is ulong) || (value is decimal) ||
-                   (value is Single)
-                   || (value is float) || (value is double);
+                   (value is float) || (value is double);
         }
 
-        private void AssertProperties(String type, Dictionary<String, Object> properties)
+        private static void AssertProperties(string type, IDictionary<string, object> properties)
         {
             if (null == properties)
             {
                 return;
             }
 
-            foreach (KeyValuePair<String, Object> kvp in properties)
+            foreach (var kvp in properties)
             {
-                string key = kvp.Key;
-                Object value = kvp.Value;
+                var key = kvp.Key;
+                var value = kvp.Value;
                 if (null == value)
                 {
                     continue;
                 }
 
-                AssertKeyWithRegex("property", kvp.Key);
-
-                if (!this.IsNumber(value) && !(value is string) && !(value is DateTime) && !(value is bool) && !(value is IList))
+                if (KeyPattern.IsMatch(key))
                 {
-                    throw new ArgumentException(
-                        "The supported data type including: Number, String, Date, Boolean,List. Invalid property: {key}");
-                }
-
-                if (value is List<object>)
-                {
-                    
-                    List<object> list = value as List<object>;
-                    for (int i = 0; i < list.Count; i++)
+                    if (!IsNumber(value) && !(value is string) && !(value is DateTime) && !(value is bool) &&
+                        !(value is IList))
                     {
-                        if (list[i] is DateTime)
-                        {
-                            list[i] = (DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss.fff");
-                        }
-                        
+                        throw new ArgumentException(
+                            "The supported data type including: Number, String, Date, Boolean,List. Invalid property: {key}");
+                    }
+
+                    // IList<object> list = value as List<object>;
+                    // if (list != null)
+                    //     for (var i = 0; i < list.Count; i++)
+                    //     {
+                    //         if (list[i] is DateTime)
+                    //         {
+                    //             list[i] = (DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss.fff");
+                    //         }
+                    //     }
+
+                    if (type == "user_add" && !IsNumber(value))
+                    {
+                        throw new ArgumentException("Only Number is allowed for user_add. Invalid property:" + key);
                     }
                 }
-
-                if (type == "user_add" && !this.IsNumber(value))
+                else
                 {
-                    throw new ArgumentException("Only Number is allowed for user_add. Invalid property:" + key);
-                }
-
-                if (key == "#time" && !(value is DateTime))
-                {
-                    throw new ArgumentException("The property value of key '#time' should be a DateTime type.");
+                    throw new ArgumentException("The " + type + "'" + key + "' is invalid.");
                 }
             }
         }
 
-        private void _Add(String account_id, String distinct_id, String type, Dictionary<String, Object> properties)
+        private void _Add(string account_id, string distinct_id, string type, IDictionary<string, object> properties)
         {
-            _Add(account_id, distinct_id, type, null, properties);
+            _Add(account_id, distinct_id, type, null, null, properties);
         }
 
-        private void _Add(String account_id, String distinct_id, String type, String event_name,
-            Dictionary<String, Object> properties)
+        private void _Add(string account_id, string distinct_id, string type, string event_name, string event_id,
+            IDictionary<string, object> properties)
         {
-            if (account_id == null && distinct_id == null)
+            if (string.IsNullOrEmpty(account_id) && string.IsNullOrEmpty(distinct_id))
             {
                 throw new SystemException("account_id or distinct_id must be provided. ");
             }
 
-            if (type.Equals("track"))
+            var eventProperties = new Dictionary<string, object>(properties);
+            if (type == "track" || type == "track_update" || type == "track_overwrite")
             {
-                AssertKey("eventName", event_name);
-                AssertKeyWithRegex("eventName", event_name);
+                if (_pubicProperties != null)
+                    lock (_pubicProperties)
+                    {
+                        foreach (var kvp in _pubicProperties)
+                        {
+                            eventProperties.Add(kvp.Key, kvp.Value);
+                        }
+                    }
             }
 
-            Dictionary<String, Object> eventProperties = new Dictionary<String, Object>();
-            Dictionary<String, Object> evt = new Dictionary<String, Object>();
+            var evt = new Dictionary<string, object>();
             if (account_id != null)
             {
                 evt.Add("#account_id", account_id);
@@ -293,57 +327,61 @@ namespace ThinkingData.Analytics
             {
                 evt.Add("#event_name", event_name);
             }
-            
+
+            if (event_id != null)
+            {
+                evt.Add("#event_id", event_id);
+            }
+
             //#uuid 只支持UUID标准格式xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-            if (properties != null && properties.ContainsKey("#uuid"))
+            if (eventProperties.ContainsKey("#uuid"))
             {
-                evt.Add("#uuid", properties["#uuid"]);
-                properties.Remove("#uuid");
+                evt.Add("#uuid", eventProperties["#uuid"]);
+                eventProperties.Remove("#uuid");
             }
-            
-            AssertProperties(type, properties);
-            if (properties != null && properties.ContainsKey("#ip"))
+            else if (_enableUuid)
             {
-                evt.Add("#ip", properties["#ip"]);
-                properties.Remove("#ip");
-            }           
-
-            if (type.Equals("track"))
-            {
-                foreach (KeyValuePair<String, Object> kvp in pubicProperties)
-                {
-                    eventProperties.Add(kvp.Key, kvp.Value);
-                }
+                evt.Add("#uuid", Guid.NewGuid().ToString("D"));
             }
 
-            if (properties != null)
+            AssertProperties(type, eventProperties);
+            if (eventProperties.ContainsKey("#ip"))
             {
-                foreach (KeyValuePair<String, Object> kvp in properties)
-                {
-                    if (kvp.Value is DateTime)
-                    {
-                        eventProperties[kvp.Key] = ((DateTime) kvp.Value).ToString("yyyy-MM-dd HH:mm:ss.fff");
-                    }
-                    else
-                    {
-                        eventProperties[kvp.Key] = kvp.Value;
-                    }
-                }
+                evt.Add("#ip", eventProperties["#ip"]);
+                eventProperties.Remove("#ip");
             }
 
-            if (eventProperties != null && eventProperties.ContainsKey("#time"))
+            //#first_check_id
+            if (eventProperties.ContainsKey("#first_check_id"))
+            {
+                evt.Add("#first_check_id", eventProperties["#first_check_id"]);
+                eventProperties.Remove("#first_check_id");
+            }
+
+            // if (properties != null)
+            // {
+            //     foreach (var kvp in properties)
+            //     {
+            //         if (kvp.Value is DateTime time)
+            //         {
+            //             eventProperties[kvp.Key] = time.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            //         }
+            //     }
+            // }
+
+            if (eventProperties.ContainsKey("#time"))
             {
                 evt.Add("#time", eventProperties["#time"]);
                 eventProperties.Remove("#time");
             }
             else
             {
-                evt.Add("#time", (DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss.fff"));
+                evt.Add("#time", DateTime.Now);
             }
 
             evt.Add("#type", type);
             evt.Add("properties", eventProperties);
-            this.consumer.Send(evt);
+            _consumer.Send(evt);
         }
     }
 }

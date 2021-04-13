@@ -1,3 +1,10 @@
+**v1.3.0** (2020/12/29)
+- 新增 track_update 接口，支持可更新事件
+- 新增 track_overwrite 接口，支持可重写事件
+- 新增 #first_check_id 属性，支持首次发生事件
+- 优化LoggerConsumer，增加指定生成文件前缀
+- 优化LoggerConsumer，增加自动创建未存在目录
+
 **v1.2.1** (2020/03/16)
 - 修复数据未及时flush问题
 

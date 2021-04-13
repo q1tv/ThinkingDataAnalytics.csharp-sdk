@@ -4,9 +4,9 @@
 
 
 
-**最新版本为：**1.1.0
+**最新版本为：** 1.3.0
 
-**更新时间为：**2019-09-24
+**更新时间为：** 2020-12-29
 
 **[C# SDK下载地址](http://download.thinkingdata.cn/server/release/ta_csharp_sdk.zip)**
 
@@ -31,7 +31,7 @@ using ThinkingData.Analytics
 
 您可以通过两种方法获得SDK实例：
 
-**(1)LoggerConsumer：**批量实时写本地文件，并以天为分隔，需要与LogBus搭配使用进行数据上传，**建议使用**
+**(1)LoggerConsumer：** 批量实时写本地文件，并以天为分隔，需要与LogBus搭配使用进行数据上传
 
 ```csharp
 //创建按天切分的 LogConsumer, 不设置单个日志上限
@@ -55,7 +55,7 @@ ta.Close();
 传入的参数为写入本地的文件夹地址，您只需将LogBus的监听文件夹地址设置为此处的地址，即可使用LogBus进行数据的监听上传。
 
 
-**(2)BatchConsumer：**批量实时向服务器传输数据，不需要搭配传输工具，**<font color="red">不建议在生产环境中使用</font>**
+**(2)BatchConsumer：** 批量实时向服务器传输数据，不需要搭配传输工具，**<font color="red">不建议在生产环境中使用</font>**
 
 ```csharp
 ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new BatchConsumer(serverURL, appid));
@@ -112,7 +112,7 @@ ta.Track(accountId, distinctId, "Payment", properties);
 // 或者只上传账号ID
 // ta.Track(accountId, null, "Payment", properties); 
 ```
-**注：**为了保证访客ID与账号ID能够顺利进行绑定，如果您的游戏中会用到访客ID与账号ID，我们极力建议您同时上传这两个ID，<font color="red">否则将会出现账号无法匹配的情况，导致用户重复计算</font>，具体的ID绑定规则可参考[用户识别规则](/user_guide/user_identify.md)一章。
+**注：** 为了保证访客ID与账号ID能够顺利进行绑定，如果您的游戏中会用到访客ID与账号ID，我们极力建议您同时上传这两个ID，<font color="red">否则将会出现账号无法匹配的情况，导致用户重复计算</font>，具体的ID绑定规则可参考[用户识别规则](/user_guide/user_identify.md)一章。
 
 
 * 事件的名称只能以字母开头，可包含数字，字母和下划线“\_”，长度最大为50个字符，对字母大小写不敏感。

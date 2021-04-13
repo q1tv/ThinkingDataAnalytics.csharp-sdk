@@ -4,14 +4,17 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Collections.Generic;
-using System.Web.Script.Serialization;
+using Newtonsoft.Json;
 using System.IO.Compression;
+using System.Timers;
+using Newtonsoft.Json.Converters;
+using Timer = System.Timers.Timer;
 
 namespace ThinkingData.Analytics
 {
     public interface IConsumer
     {
-        void Send(Dictionary<string, Object> message);
+        void Send(Dictionary<string, object> message);
 
         void Flush();
 
@@ -20,13 +23,30 @@ namespace ThinkingData.Analytics
 
     public class LoggerConsumer : IConsumer
     {
-        private readonly JavaScriptSerializer js = new JavaScriptSerializer();
-        private readonly String logDirectory;
-        private readonly StringBuilder messageBuffer;
-        private readonly int bufferSize = 8192;
-        private readonly int fileSize;
-        private RotateMode rotateHourly;
-        private InnerLoggerFileWriter fileWriter;
+        private const string DefaultFileNamePrefix = "log";
+        private const int DefaultBufferSize = 8192;
+        private const int DefaultBatchSec = 10;
+        private const int DefaultFileSize = -1;
+        private const RotateMode DefaultRotateMode = RotateMode.DAILY;
+        private const bool DefaultAsync = true;
+
+        private readonly IsoDateTimeConverter _timeConverter = new IsoDateTimeConverter
+        {
+            DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff"
+        };
+
+        private readonly string _logDirectory;
+        private readonly int _bufferSize;
+        private readonly int _batchSec;
+        private readonly int _fileSize;
+        private readonly string _fileNamePrefix;
+        private readonly bool _async;
+        private readonly RotateMode _rotateHourly;
+
+        private Timer _timer;
+        private long _sendTimer = -1;
+        private readonly StringBuilder _messageBuffer;
+        private InnerLoggerFileWriter _fileWriter;
 
         public enum RotateMode
         {
@@ -37,47 +57,100 @@ namespace ThinkingData.Analytics
             HOURLY
         }
 
-        //默认按天切分文件
-        public LoggerConsumer(String logDirectory) : this(logDirectory, RotateMode.DAILY)
+
+        public LoggerConsumer(string logDirectory) : this(logDirectory, DefaultRotateMode, DefaultFileSize,
+            DefaultFileNamePrefix, DefaultBufferSize, DefaultBatchSec, DefaultAsync)
         {
         }
 
-        public LoggerConsumer(String logDirectory, int fileSize) : this(logDirectory, RotateMode.DAILY, fileSize)
-        {
-        }
-        
-        // 默认情况下不限制文件大小 fileSize = 0
-        public LoggerConsumer(String logDirectory, RotateMode rotateHourly) : this(logDirectory, rotateHourly, 0)
+        public LoggerConsumer(string logDirectory, int bufferSize, int batchSec) : this(logDirectory, DefaultRotateMode,
+            DefaultFileSize, DefaultFileNamePrefix, bufferSize, batchSec, DefaultAsync)
         {
         }
 
-
-        public LoggerConsumer(String logDirectory, RotateMode rotateHourly, int fileSize)
+        public LoggerConsumer(string logDirectory, bool async) : this(logDirectory, DefaultRotateMode, DefaultFileSize,
+            DefaultFileNamePrefix, DefaultBufferSize, DefaultBatchSec, async)
         {
-            this.logDirectory = logDirectory+"/";
-            this.rotateHourly = rotateHourly;
-            this.fileSize = fileSize;
-            this.messageBuffer = new StringBuilder(bufferSize);
         }
 
+        public LoggerConsumer(string logDirectory, LogConfig config) : this(logDirectory, config.RotateMode,
+            config.FileSize, config.FileNamePrefix, config.BufferSize, config.BatchSec, config.Async)
+        {
+        }
 
-        public virtual void Send(Dictionary<string, Object> message)
+        public LoggerConsumer(string logDirectory, int fileSize) : this(logDirectory, DefaultRotateMode, fileSize,
+            DefaultFileNamePrefix, DefaultBufferSize, DefaultBatchSec, DefaultAsync)
+        {
+        }
+
+        public LoggerConsumer(string logDirectory, string fileNamePrefix) : this(logDirectory, DefaultRotateMode,
+            DefaultFileSize, fileNamePrefix, DefaultBufferSize, DefaultBatchSec, DefaultAsync)
+        {
+        }
+
+        public LoggerConsumer(string logDirectory, RotateMode rotateHourly) : this(logDirectory, rotateHourly,
+            DefaultFileSize, DefaultFileNamePrefix, DefaultBufferSize, DefaultBatchSec, DefaultAsync)
+        {
+        }
+
+        public LoggerConsumer(string logDirectory, RotateMode rotateHourly, int fileSize, string fileNamePrefix,
+            int bufferSize, int batchSec, bool async)
+        {
+            _logDirectory = logDirectory + "/";
+            if (!Directory.Exists(_logDirectory))
+            {
+                Directory.CreateDirectory(_logDirectory);
+            }
+
+            _rotateHourly = rotateHourly;
+            _fileSize = fileSize;
+            _fileNamePrefix = fileNamePrefix;
+            _bufferSize = bufferSize;
+            _batchSec = batchSec;
+            _async = async;
+            _messageBuffer = new StringBuilder(bufferSize);
+            if (!async) return;
+            _batchSec = batchSec * 1000;
+            _timer = new Timer {Enabled = true, Interval = 1000};
+            _timer.Start();
+            _timer.Elapsed += task;
+        }
+
+        private void task(object source, ElapsedEventArgs args)
+        {
+            if (_sendTimer == -1 || (CurrentTimeMillis() - _sendTimer < _batchSec)) return;
+            try
+            {
+                Flush();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+        }
+
+        private static long CurrentTimeMillis()
+        {
+            return (long) (DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+        }
+
+        public virtual void Send(Dictionary<string, object> message)
         {
             lock (this)
             {
                 try
                 {
-                    messageBuffer.Append(js.Serialize(message));
-                    messageBuffer.Append("\r\n");
+                    _messageBuffer.Append(JsonConvert.SerializeObject(message, _timeConverter));
+                    _messageBuffer.Append("\r\n");
                 }
                 catch (Exception e)
                 {
                     throw new SystemException("Failed to add data", e);
                 }
 
-                if (messageBuffer.Length >= bufferSize)
+                if (_messageBuffer.Length >= _bufferSize)
                 {
-                    this.Flush();
+                    Flush();
                 }
             }
         }
@@ -86,145 +159,146 @@ namespace ThinkingData.Analytics
         {
             lock (this)
             {
-                if (messageBuffer.Length == 0)
+                if (_messageBuffer.Length == 0)
                 {
                     return;
                 }
 
-                String fileName = this.getFileName();
+                var fileName = GetFileName();
 
-                if (fileWriter != null && !fileWriter.IsValid(fileName))
+                if (_fileWriter != null && !_fileWriter.IsValid(fileName))
                 {
-                    InnerLoggerFileWriter.RemoveInstance(fileWriter);
-                    fileWriter = null;
+                    InnerLoggerFileWriter.RemoveInstance(_fileWriter);
+                    _fileWriter = null;
                 }
 
-                if (fileWriter == null)
+                if (_fileWriter == null)
                 {
-                    fileWriter = InnerLoggerFileWriter.GetInstance(fileName);
+                    _fileWriter = InnerLoggerFileWriter.GetInstance(fileName);
                 }
 
-                if (fileWriter.Write(messageBuffer))
-                {
-                    messageBuffer.Length = 0;
-                }
+                if (!_fileWriter.Write(_messageBuffer)) return;
+                _messageBuffer.Length = 0;
+                _sendTimer = -1;
             }
         }
 
-        public String getFileName()
+        public string GetFileName()
         {
-            var sdf = this.rotateHourly == RotateMode.HOURLY
+            var sdf = this._rotateHourly == RotateMode.HOURLY
                 ? DateTime.Now.ToString("yyyy-MM-dd-HH")
                 : DateTime.Now.ToString("yyyy-MM-dd");
-            String file_base = logDirectory + "log." + sdf + "_";
-            int count = 0;
-            String file_complete = file_base + count;
-            FileInfo target = new FileInfo(file_complete);
-            if (this.fileSize > 0)
+            var fileBase = _logDirectory + _fileNamePrefix + "." + sdf + "_";
+            var count = 0;
+            var fileComplete = fileBase + count;
+            var target = new FileInfo(fileComplete);
+            if (_fileSize <= 0) return fileComplete;
+            while (File.Exists(fileComplete) && FileSizeOut(target))
             {
-                while (File.Exists(file_complete) && fileSizeOut(target))
-                {
-                    count += 1;
-                    file_complete = file_base + count;
-                    target = new FileInfo(file_complete);
-                }
+                count += 1;
+                fileComplete = fileBase + count;
+                target = new FileInfo(fileComplete);
             }
 
-            return file_complete;
+            return fileComplete;
         }
 
-        public Boolean fileSizeOut(FileInfo target)
+        public bool FileSizeOut(FileInfo target)
         {
-            long fsize = target.Length;
-            fsize = fsize / (1024 * 1024);
-            if (fsize >= fileSize)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+            var fsize = target.Length;
+            fsize /= (1024 * 1024);
+            return fsize >= _fileSize;
         }
 
         public void Close()
         {
-            this.Flush();
-            if (fileWriter != null)
-            {
-                InnerLoggerFileWriter.RemoveInstance(fileWriter);
-                fileWriter = null;
-            }
+            Flush();
+            if (_fileWriter == null) return;
+            InnerLoggerFileWriter.RemoveInstance(_fileWriter);
+            _fileWriter = null;
+        }
+
+        public class LogConfig
+        {
+            public int BufferSize { get; set; } = 50;
+            public int BatchSec { get; set; } = 10;
+            public int FileSize { get; set; } = -1;
+            public string FileNamePrefix { get; set; } = "log";
+            public bool Async { get; set; } = true;
+            public RotateMode RotateMode { get; set; } = RotateMode.DAILY;
         }
 
         private class InnerLoggerFileWriter
         {
-            private static Dictionary<String, InnerLoggerFileWriter> instances =
+            private static readonly Dictionary<string, InnerLoggerFileWriter> Instances =
                 new Dictionary<string, InnerLoggerFileWriter>();
 
-            private readonly String fileName;
-            private readonly Mutex mutex;
-            private readonly FileStream outputStream;
-            private int refCount;
+            private readonly string _fileName;
+            private readonly Mutex _mutex;
+            private readonly FileStream _outputStream;
+            private int _refCount;
 
-            private InnerLoggerFileWriter(String fileName)
+            private InnerLoggerFileWriter(string fileName)
             {
-                this.outputStream = new FileStream(fileName, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                this.fileName = fileName;
-                this.refCount = 0;
-                String mutexName = "Global\\ThinkingdataAnalytics " + Path.GetFullPath(fileName).Replace('\\', '_');
-                this.mutex = new Mutex(false, mutexName);
+                _outputStream = new FileStream(fileName, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                _fileName = fileName;
+                _refCount = 0;
+                var mutexName = "Global\\ThinkingdataAnalytics " + Path.GetFullPath(fileName).Replace('\\', '_');
+                _mutex = new Mutex(false, mutexName);
             }
 
-            public static InnerLoggerFileWriter GetInstance(String fileName)
+            public static InnerLoggerFileWriter GetInstance(string fileName)
             {
-                lock (instances)
+                if (Instances.ContainsKey(fileName))
                 {
-                    if (!instances.ContainsKey(fileName))
+                    return Instances[fileName];
+                }
+
+                lock (Instances)
+                {
+                    if (!Instances.ContainsKey(fileName))
                     {
-                        instances.Add(fileName, new InnerLoggerFileWriter(fileName));
+                        Instances.Add(fileName, new InnerLoggerFileWriter(fileName));
                     }
 
-                    InnerLoggerFileWriter writer = instances[fileName];
-                    writer.refCount = writer.refCount + 1;
+                    var writer = Instances[fileName];
+                    writer._refCount += 1;
                     return writer;
                 }
             }
 
             public static void RemoveInstance(InnerLoggerFileWriter writer)
             {
-                lock (instances)
+                lock (Instances)
                 {
-                    writer.refCount = writer.refCount - 1;
-                    if (writer.refCount == 0)
-                    {
-                        writer.Close();
-                        instances.Remove(writer.fileName);
-                    }
+                    writer._refCount -= 1;
+                    if (writer._refCount != 0) return;
+                    writer.Close();
+                    Instances.Remove(writer._fileName);
                 }
             }
 
-            public void Close()
+            private void Close()
             {
-                outputStream.Close();
-                mutex.Close();
+                _outputStream.Close();
+                _mutex.Close();
             }
 
-            public bool IsValid(String fileName)
+            public bool IsValid(string fileName)
             {
-                return this.fileName.Equals(fileName);
+                return this._fileName.Equals(fileName);
             }
 
             public bool Write(StringBuilder data)
             {
-                lock (outputStream)
+                lock (_outputStream)
                 {
-                    mutex.WaitOne();
-                    outputStream.Seek(0, SeekOrigin.End);
-                    byte[] bytes = Encoding.UTF8.GetBytes(data.ToString());
-                    outputStream.Write(bytes, 0, bytes.Length);
-                    outputStream.Flush();
-                    mutex.ReleaseMutex();
+                    _mutex.WaitOne();
+                    _outputStream.Seek(0, SeekOrigin.End);
+                    var bytes = Encoding.UTF8.GetBytes(data.ToString());
+                    _outputStream.Write(bytes, 0, bytes.Length);
+                    _outputStream.Flush();
+                    _mutex.ReleaseMutex();
                 }
 
                 return true;
@@ -234,35 +308,41 @@ namespace ThinkingData.Analytics
 
     public class BatchConsumer : IConsumer
     {
-        private readonly static int MAX_FLUSH_BATCH_SIZE = 20;
-        private readonly static int DEFAULT_TIME_OUT_SECOND = 30;
+        private const int MaxFlushBatchSize = 20;
+        private const int DefaultTimeOutSecond = 30;
 
-        private readonly List<Dictionary<string, Object>> messageList;
-        private readonly JavaScriptSerializer js;
+        private readonly List<Dictionary<string, object>> _messageList;
 
+        private readonly IsoDateTimeConverter _timeConverter = new IsoDateTimeConverter
+        {
+            DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff"
+        };
 
-        private readonly String url;
-        private readonly String appId;
-        private readonly int batchSize;
-        private readonly int requestTimeoutMillisecond;
-        private readonly bool throwException;
-        private readonly bool compress;
+        private readonly string _url;
+        private readonly string _appId;
+        private readonly int _batchSize;
+        private readonly int _requestTimeoutMillisecond;
+        private readonly bool _throwException;
+        private readonly bool _compress;
 
-        public BatchConsumer(string serverUrl, string appId) : this(serverUrl, appId,MAX_FLUSH_BATCH_SIZE, DEFAULT_TIME_OUT_SECOND,false,true)
+        public BatchConsumer(string serverUrl, string appId) : this(serverUrl, appId, MaxFlushBatchSize,
+            DefaultTimeOutSecond, false, true)
         {
         }
-        
+
         /**
          * 数据是否需要压缩，compress 内网可设置 false
          */
-        public BatchConsumer(string serverUrl, string appId,bool compress) : this(serverUrl, appId,MAX_FLUSH_BATCH_SIZE, DEFAULT_TIME_OUT_SECOND,false,compress)
+        public BatchConsumer(string serverUrl, string appId, bool compress) : this(serverUrl, appId, MaxFlushBatchSize,
+            DefaultTimeOutSecond, false, compress)
         {
         }
+
         /**
          * batchSize 每次flush到TA的数据条数，默认20条
          */
-
-        public BatchConsumer(string serverUrl, string appId, int batchSize) : this(serverUrl, appId, batchSize,DEFAULT_TIME_OUT_SECOND)
+        public BatchConsumer(string serverUrl, string appId, int batchSize) : this(serverUrl, appId, batchSize,
+            DefaultTimeOutSecond)
         {
         }
 
@@ -271,52 +351,52 @@ namespace ThinkingData.Analytics
          * requestTimeoutSecond 发送服务器请求时间设置，默认30s
          */
         public BatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond) : this(serverUrl,
-            appId, batchSize, requestTimeoutSecond, false,true)
+            appId, batchSize, requestTimeoutSecond, false)
         {
-        }
-        
-        public BatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond, bool throwException,bool compress = true)
-        {
-            messageList = new List<Dictionary<string, object>>();
-            js = new JavaScriptSerializer();
-            Uri relativeUri = new Uri("/sync_server", UriKind.Relative);
-            url = new Uri(new Uri(serverUrl), relativeUri).AbsoluteUri;
-            this.appId = appId;
-            this.batchSize = Math.Min(MAX_FLUSH_BATCH_SIZE, batchSize);
-            this.throwException = throwException;
-            this.compress = compress;
-            this.requestTimeoutMillisecond = requestTimeoutSecond * 1000;
         }
 
-        public void Send(Dictionary<string, Object> message)
+        public BatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond,
+            bool throwException, bool compress = true)
         {
-            lock (messageList)
+            _messageList = new List<Dictionary<string, object>>();
+            var relativeUri = new Uri("/sync_server", UriKind.Relative);
+            _url = new Uri(new Uri(serverUrl), relativeUri).AbsoluteUri;
+            this._appId = appId;
+            this._batchSize = Math.Min(MaxFlushBatchSize, batchSize);
+            this._throwException = throwException;
+            this._compress = compress;
+            this._requestTimeoutMillisecond = requestTimeoutSecond * 1000;
+        }
+
+        public void Send(Dictionary<string, object> message)
+        {
+            lock (_messageList)
             {
-                messageList.Add(message);
-                if (messageList.Count >= batchSize)
+                _messageList.Add(message);
+                if (_messageList.Count >= _batchSize)
                 {
-                    this.Flush();
+                    Flush();
                 }
             }
         }
 
         public void Flush()
         {
-            lock (messageList)
+            lock (_messageList)
             {
-                while (messageList.Count != 0)
+                while (_messageList.Count != 0)
                 {
-                    int batchRecordCount = Math.Min(batchSize, messageList.Count);
-                    List<Dictionary<string, Object>> batchList = messageList.GetRange(0, batchRecordCount);
+                    var batchRecordCount = Math.Min(_batchSize, _messageList.Count);
+                    var batchList = _messageList.GetRange(0, batchRecordCount);
                     string sendingData;
                     try
                     {
-                        sendingData = js.Serialize(batchList);
+                        sendingData = JsonConvert.SerializeObject(batchList, _timeConverter);
                     }
                     catch (Exception exception)
                     {
-                        messageList.RemoveRange(0, batchRecordCount);
-                        if (throwException)
+                        _messageList.RemoveRange(0, batchRecordCount);
+                        if (_throwException)
                         {
                             throw new SystemException("Failed to serialize data.", exception);
                         }
@@ -326,12 +406,12 @@ namespace ThinkingData.Analytics
 
                     try
                     {
-                        this.SendToServer(sendingData);
-                        messageList.RemoveRange(0, batchRecordCount);
+                        SendToServer(sendingData);
+                        _messageList.RemoveRange(0, batchRecordCount);
                     }
                     catch (Exception exception)
                     {
-                        if (throwException)
+                        if (_throwException)
                         {
                             throw new SystemException("Failed to send message with BatchConsumer.", exception);
                         }
@@ -346,31 +426,23 @@ namespace ThinkingData.Analytics
         {
             try
             {
-                byte[] dataBytes =Encoding.UTF8.GetBytes(dataStr);
-                byte[] dataCompressed = null;
-                if (this.compress)
-                {
-                    dataCompressed = Gzip(dataStr);
-                }
-                else
-                {
-                    dataCompressed = dataBytes;
-                }
-                
-                HttpWebRequest request = (HttpWebRequest) WebRequest.Create(this.url);
+                var dataBytes = Encoding.UTF8.GetBytes(dataStr);
+                var dataCompressed = _compress ? Gzip(dataStr) : dataBytes;
+
+                var request = (HttpWebRequest) WebRequest.Create(this._url);
                 request.Method = "POST";
-                request.ReadWriteTimeout = requestTimeoutMillisecond;
-                request.Timeout = requestTimeoutMillisecond;
+                request.ReadWriteTimeout = _requestTimeoutMillisecond;
+                request.Timeout = _requestTimeoutMillisecond;
                 request.UserAgent = "C# SDK";
-                request.Headers.Set("appid", this.appId);
-                request.Headers.Set("compress",this.compress ? "gzip" : "none");
-                using (Stream stream = request.GetRequestStream())
+                request.Headers.Set("appid", _appId);
+                request.Headers.Set("compress", _compress ? "gzip" : "none");
+                using (var stream = request.GetRequestStream())
                 {
                     stream.Write(dataCompressed, 0, dataCompressed.Length);
                     stream.Flush();
                 }
 
-                HttpWebResponse response = (HttpWebResponse) request.GetResponse();
+                var response = (HttpWebResponse) request.GetResponse();
 
                 var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
 
@@ -379,10 +451,11 @@ namespace ThinkingData.Analytics
                 {
                     throw new SystemException("C# SDK send response is not 200, content: " + responseString);
                 }
-                response.Close();
-                Dictionary<string,object> resultJson = (Dictionary<string, object>)js.DeserializeObject(responseString);
 
-                int code = (int) resultJson["code"];
+                response.Close();
+                var resultJson = JsonConvert.DeserializeObject<Dictionary<object, object>>(responseString);
+
+                int code = Convert.ToInt32(resultJson["code"]);
 
                 if (code != 0)
                 {
@@ -415,14 +488,14 @@ namespace ThinkingData.Analytics
             }
             catch (Exception e)
             {
-                Console.WriteLine(e + "\n  Cannot post message to " + this.url);
+                Console.WriteLine(e + "\n  Cannot post message to " + _url);
                 throw;
             }
         }
 
-        private byte[] Gzip(string inputStr)
+        private static byte[] Gzip(string inputStr)
         {
-            byte[] inputBytes = Encoding.UTF8.GetBytes(inputStr);
+            var inputBytes = Encoding.UTF8.GetBytes(inputStr);
             using (var outputStream = new MemoryStream())
             {
                 using (var gzipStream = new GZipStream(outputStream, CompressionMode.Compress))
@@ -440,37 +513,38 @@ namespace ThinkingData.Analytics
     //逐条传输数据，如果发送失败则抛出异常
     public class DebugConsumer : IConsumer
     {
-        private readonly string url;
-        private readonly string appId;
-        private readonly int requestTimeout = 30000;
-        private readonly JavaScriptSerializer js;
-        private readonly bool writeData;
+        private readonly string _url;
+        private readonly string _appId;
+        private readonly int _requestTimeout;
+        private readonly bool _writeData;
+
+        private readonly IsoDateTimeConverter _timeConverter = new IsoDateTimeConverter
+            {DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff"};
 
         public DebugConsumer(string serverUrl, string appId) : this(serverUrl, appId, 30000)
         {
         }
 
-        public DebugConsumer(string serverUrl, string appId, bool writeData):this(serverUrl,appId,30000,writeData)
-        {   
+        public DebugConsumer(string serverUrl, string appId, bool writeData) : this(serverUrl, appId, 30000, writeData)
+        {
         }
 
-        public DebugConsumer(string serverUrl, String appId, int requestTimeout,bool writeData = true)
+        public DebugConsumer(string serverUrl, string appId, int requestTimeout, bool writeData = true)
         {
-            Uri relativeUri = new Uri("/data_debug", UriKind.Relative);
-            url = new Uri(new Uri(serverUrl), relativeUri).AbsoluteUri;
-            js = new JavaScriptSerializer();
-            this.appId = appId;
-            this.requestTimeout = requestTimeout;
-            this.writeData = writeData;
+            var relativeUri = new Uri("/data_debug", UriKind.Relative);
+            _url = new Uri(new Uri(serverUrl), relativeUri).AbsoluteUri;
+            this._appId = appId;
+            this._requestTimeout = requestTimeout;
+            this._writeData = writeData;
         }
 
-        public void Send(Dictionary<string, Object> message)
+        public void Send(Dictionary<string, object> message)
         {
-            string sendingData;
             try
             {
-                sendingData = js.Serialize(message);
-                this.SendToServer(sendingData);
+                var sendingData = JsonConvert.SerializeObject(message, _timeConverter);
+                Console.WriteLine(sendingData);
+                SendToServer(sendingData);
             }
             catch (Exception exception)
             {
@@ -483,33 +557,33 @@ namespace ThinkingData.Analytics
         {
             try
             {
-                HttpWebRequest req = (HttpWebRequest) WebRequest.Create(url);
+                var req = (HttpWebRequest) WebRequest.Create(_url);
 
                 req.Method = "POST";
 
                 req.ContentType = "application/x-www-form-urlencoded";
 
-                int dryRun = 1;
-                if (this.writeData)
+                var dryRun = 1;
+                if (_writeData)
                 {
                     dryRun = 0;
                 }
 
-                var postData = "appid=" + this.appId + "&source=server&dryRun="+dryRun+"&data=" + dataStr;
+                var postData = "appid=" + _appId + "&source=server&dryRun=" + dryRun + "&data=" + dataStr;
 
 
-                byte[] data = Encoding.UTF8.GetBytes(postData);
+                var data = Encoding.UTF8.GetBytes(postData);
 
                 req.ContentLength = data.Length;
 
-                using (Stream reqStream = req.GetRequestStream())
+                using (var reqStream = req.GetRequestStream())
                 {
                     reqStream.Write(data, 0, data.Length);
 
                     reqStream.Close();
                 }
 
-                HttpWebResponse response = (HttpWebResponse) req.GetResponse();
+                var response = (HttpWebResponse) req.GetResponse();
 
                 var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
 
@@ -517,22 +591,23 @@ namespace ThinkingData.Analytics
                 {
                     throw new SystemException("C# SDK send response is not 200, content: " + responseString);
                 }
-                response.Close();
-                Dictionary<string,object> resultJson = (Dictionary<string, object>)js.DeserializeObject(responseString);
 
-                 int errorLevel = (int) resultJson["errorLevel"];
+                response.Close();
+                var resultJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(responseString);
+
+                var errorLevel = Convert.ToInt32(resultJson["errorLevel"]);
 
                 if (errorLevel != 0)
                 {
-                   throw new Exception("\n Can't send because :\n"+responseString);
+                    throw new Exception("\n Can't send because :\n" + responseString);
                 }
             }
             catch (Exception e)
             {
-                throw new SystemException(e + "\n Cannot post message to " + this.url);
+                throw new SystemException(e + "\n Cannot post message to " + this._url);
             }
         }
-        
+
         public void Flush()
         {
         }
