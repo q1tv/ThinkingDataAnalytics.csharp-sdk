@@ -243,7 +243,8 @@ namespace ThinkingData.Analytics
                 _outputStream = new FileStream(fileName, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
                 _fileName = fileName;
                 _refCount = 0;
-                var mutexName = "Global\\ThinkingdataAnalytics " + Path.GetFullPath(fileName).Replace('\\', '_');
+                var mutexName = "Global\\ThinkingdataAnalytics " +
+                                Path.GetFullPath(fileName).Replace('\\', '_').Replace('/', '_');
                 _mutex = new Mutex(false, mutexName);
             }
 

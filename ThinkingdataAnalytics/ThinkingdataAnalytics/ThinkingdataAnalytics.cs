@@ -8,7 +8,7 @@ namespace ThinkingData.Analytics
 {
     public class ThinkingdataAnalytics
     {
-        private const string LibVersion = "1.3.0";
+        private const string LibVersion = "1.3.1";
         private const string LibName = "tga_csharp_sdk";
 
         private static readonly Regex KeyPattern =
