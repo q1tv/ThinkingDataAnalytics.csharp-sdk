@@ -511,6 +511,263 @@ namespace ThinkingData.Analytics
         }
     }
 
+    public class AsyncBatchConsumer : IConsumer
+    {
+        private const int MaxFlushBatchSize = 20;
+        private const int DefaultTimeOutSecond = 30;
+
+        private readonly List<Dictionary<string, object>> _messageList;
+
+        private readonly IsoDateTimeConverter _timeConverter = new IsoDateTimeConverter
+        {
+            DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff"
+        };
+
+        private readonly string _url;
+        private readonly string _appId;
+        private readonly int _batchSize;
+        private readonly int _requestTimeoutMillisecond;
+        private readonly bool _throwException;
+        private readonly bool _compress;
+
+        private System.Threading.Semaphore _semaphore = new Semaphore(1, 1);
+        private EventWaitHandle _waitHandle = new AutoResetEvent(false);
+        private Thread _asyncThread;
+
+        public AsyncBatchConsumer(string serverUrl, string appId) : this(serverUrl, appId, MaxFlushBatchSize,
+            DefaultTimeOutSecond, false, true)
+        {
+        }
+
+        /**
+         * 数据是否需要压缩，compress 内网可设置 false
+         */
+        public AsyncBatchConsumer(string serverUrl, string appId, bool compress) : this(serverUrl, appId, MaxFlushBatchSize,
+            DefaultTimeOutSecond, false, compress)
+        {
+        }
+
+        /**
+         * batchSize 每次flush到TA的数据条数，默认20条
+         */
+        public AsyncBatchConsumer(string serverUrl, string appId, int batchSize) : this(serverUrl, appId, batchSize,
+            DefaultTimeOutSecond)
+        {
+        }
+
+        /**
+         * batchSize 每次flush到TA的数据条数，默认20条
+         * requestTimeoutSecond 发送服务器请求时间设置，默认30s
+         */
+        public AsyncBatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond) : this(serverUrl,
+            appId, batchSize, requestTimeoutSecond, false)
+        {
+        }
+
+        public AsyncBatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond,
+            bool throwException, bool compress = true)
+        {
+            _messageList = new List<Dictionary<string, object>>();
+            var relativeUri = new Uri("/sync_server", UriKind.Relative);
+            _url = new Uri(new Uri(serverUrl), relativeUri).AbsoluteUri;
+            this._appId = appId;
+            this._batchSize = Math.Min(MaxFlushBatchSize, batchSize);
+            this._throwException = throwException;
+            this._compress = compress;
+            this._requestTimeoutMillisecond = requestTimeoutSecond * 1000;
+
+            StartAsyncThread();
+        }
+
+        private void StartAsyncThread()
+        {
+            _asyncThread = new Thread(() => {
+                while (true)
+                {
+                    if (_messageList.Count > 0)
+                    {
+                        _semaphore.WaitOne();
+                        AsyncFlush();
+                    }
+                    else
+                    {
+                        _waitHandle.WaitOne();
+                    }
+                }
+            });
+            _asyncThread.Start();
+        }
+
+        public void Send(Dictionary<string, object> message)
+        {
+            lock (_messageList)
+            {
+                _messageList.Add(message);
+                if (_messageList.Count >= _batchSize)
+                {
+                    Flush();
+                }
+            }
+        }
+
+        public void Flush()
+        {
+            _waitHandle.Set();
+        }
+
+        private void AsyncFlush()
+        {
+            lock (_messageList)
+            {
+                if (_messageList.Count != 0)
+                {
+                    var batchRecordCount = Math.Min(_batchSize, _messageList.Count);
+                    var batchList = _messageList.GetRange(0, batchRecordCount);
+                    string sendingData = null;
+                    try
+                    {
+                        sendingData = JsonConvert.SerializeObject(batchList, _timeConverter);
+                    }
+                    catch (Exception exception)
+                    {
+                        _messageList.RemoveRange(0, batchRecordCount);
+                        if (_throwException)
+                        {
+                            throw new SystemException("Failed to serialize data.", exception);
+                        }
+                    }
+
+                    SendToServer(sendingData);
+                    _messageList.RemoveRange(0, batchRecordCount);
+                }
+            }
+        }
+
+        private void onResponse(IAsyncResult asyncResult)
+        {
+            try
+            {
+                WebRequest webRequest = (WebRequest)asyncResult.AsyncState;
+                HttpWebResponse response = webRequest.EndGetResponse(asyncResult) as HttpWebResponse;
+                var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
+
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    throw new SystemException("C# SDK send response is not 200, content: " + responseString);
+                }
+                response.Close();
+                var resultJson = JsonConvert.DeserializeObject<Dictionary<object, object>>(responseString);
+
+                int code = Convert.ToInt32(resultJson["code"]);
+
+                if (code != 0)
+                {
+                    if (code == -1)
+                    {
+                        throw new SystemException("error msg:" +
+                                                  (resultJson.ContainsKey("msg")
+                                                      ? resultJson["msg"]
+                                                      : "invalid data format"));
+                    }
+                    else if (code == -2)
+                    {
+                        throw new SystemException("error msg:" +
+                                                  (resultJson.ContainsKey("msg")
+                                                      ? resultJson["msg"]
+                                                      : "APP ID doesn't exist"));
+                    }
+                    else if (code == -3)
+                    {
+                        throw new SystemException("error msg:" +
+                                                  (resultJson.ContainsKey("msg")
+                                                      ? resultJson["msg"]
+                                                      : "invalid ip transmission"));
+                    }
+                    else
+                    {
+                        throw new SystemException("Unexpected response return code: " + code);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e + "\n [onResponse] Cannot post message to " + _url);
+            }
+            finally
+            {
+                _semaphore.Release();
+                if (_messageList.Count > 0)
+                {
+                    //还有数据，需要上报
+                    AsyncFlush();
+                }
+            }
+        }
+
+        private void onRequest(IAsyncResult asyncResult)
+        {
+            try
+            {
+                Dictionary<string, object> asyncState = asyncResult.AsyncState as Dictionary<string, object>;
+                WebRequest webRequest = asyncState["webRequest"] as WebRequest;
+
+                byte[] dataCompressed = asyncState["dataCompressed"] as byte[];
+                Stream stream = webRequest.EndGetRequestStream(asyncResult) as Stream;
+                stream.Write(dataCompressed, 0, dataCompressed.Length);
+                stream.Flush();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e + "\n [onRequest] Cannot post message to " + _url);
+            }
+        }
+
+        private void SendToServer(string dataStr)
+        {
+            try
+            {
+                var dataBytes = Encoding.UTF8.GetBytes(dataStr);
+                var dataCompressed = _compress ? Gzip(dataStr) : dataBytes;
+
+                var request = (HttpWebRequest)WebRequest.Create(this._url);
+                request.Method = "POST";
+                request.ReadWriteTimeout = _requestTimeoutMillisecond;
+                request.Timeout = _requestTimeoutMillisecond;
+                request.UserAgent = "C# SDK";
+                request.Headers.Set("appid", _appId);
+                request.Headers.Set("compress", _compress ? "gzip" : "none");
+                request.ContentLength = dataCompressed.Length;
+
+                var webRequest = request as HttpWebRequest;
+                webRequest.BeginGetRequestStream(new AsyncCallback(onRequest), new Dictionary<string, object> {
+                    { "webRequest", webRequest},
+                    { "dataCompressed", dataCompressed} });
+                webRequest.BeginGetResponse(new AsyncCallback(onResponse), webRequest);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e + "\n [SendToServer] Cannot post message to " + _url);
+                throw;
+            }
+        }
+
+        private static byte[] Gzip(string inputStr)
+        {
+            var inputBytes = Encoding.UTF8.GetBytes(inputStr);
+            using (var outputStream = new MemoryStream())
+            {
+                using (var gzipStream = new GZipStream(outputStream, CompressionMode.Compress))
+                    gzipStream.Write(inputBytes, 0, inputBytes.Length);
+                return outputStream.ToArray();
+            }
+        }
+
+        public void Close()
+        {
+            Flush();
+        }
+    }
+
     //逐条传输数据，如果发送失败则抛出异常
     public class DebugConsumer : IConsumer
     {

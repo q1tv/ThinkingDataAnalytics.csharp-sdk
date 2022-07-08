@@ -6,9 +6,17 @@ using System.Text.RegularExpressions;
 
 namespace ThinkingData.Analytics
 {
+    /* 
+     * 动态公共属性
+     */
+    public interface IDynamicPublicProperties
+    {
+        Dictionary<string, object> GetDynamicPublicProperties();
+    }
+
     public class ThinkingdataAnalytics
     {
-        private const string LibVersion = "1.3.1";
+        private const string LibVersion = "1.4.0";
         private const string LibName = "tga_csharp_sdk";
 
         private static readonly Regex KeyPattern =
@@ -19,6 +27,9 @@ namespace ThinkingData.Analytics
         private readonly bool _enableUuid;
 
         private readonly Dictionary<string, object> _pubicProperties;
+
+        private IDynamicPublicProperties _dynamicPublicProperties;
+
 
         /*
          * 实例化tga类，接收一个Consumer的一个实例化对象
@@ -64,8 +75,13 @@ namespace ThinkingData.Analytics
             }
         }
 
-        // 记录一个没有任何属性的事件
-        public void Track(string account_id, string distinct_id, string event_name)
+        public void SetDynamicPublicProperties(IDynamicPublicProperties dynamicPublicProperties)
+        {
+            _dynamicPublicProperties = dynamicPublicProperties;
+        }
+
+            // 记录一个没有任何属性的事件
+            public void Track(string account_id, string distinct_id, string event_name)
         {
             _Add(account_id, distinct_id, "track", event_name, null, null);
         }
@@ -88,6 +104,29 @@ namespace ThinkingData.Analytics
             _Add(account_id, distinct_id, "track", event_name, null, properties);
         }
 
+        /*
+        * 首次事件属性
+        * @param	account_id	    账号ID
+        * @param	distinct_id	    匿名ID
+        * @param	event_name	    事件名称
+        * @param    first_check_id  事件ID
+        * @param	properties	    事件属性
+        */
+        public void TrackFirst(string account_id, string distinct_id, string event_name, string first_check_id,
+            Dictionary<string, object> properties)
+        {
+            if (string.IsNullOrEmpty(event_name))
+            {
+                throw new SystemException("The event name must be provided.");
+            }
+
+            if (string.IsNullOrEmpty(first_check_id))
+            {
+                throw new SystemException("The first check id must be provided.");
+            }
+
+            _Add(account_id, distinct_id, "track_first", event_name, first_check_id, properties);
+        }
         /*
 	    * 可更新事件属性
 	    * @param	account_id	账号ID
@@ -210,6 +249,17 @@ namespace ThinkingData.Analytics
             _Add(account_id, distinct_id, "user_append", properties);
         }
 
+        /*
+          * 追加用户的集合类型的一个或多个属性(对于重复元素进行去重处理)
+          * @param	account_id	账号ID
+          * @param	distinct_id	匿名ID
+          * @param	properties	增加的用户属性
+         */
+        public void UserUniqAppend(string account_id, string distinct_id, Dictionary<string, object> properties)
+        {
+            _Add(account_id, distinct_id, "user_uniq_append", properties);
+        }
+
         /**
          * 用户删除,此操作不可逆
          * @param 	account_id	账号ID
@@ -239,6 +289,13 @@ namespace ThinkingData.Analytics
                    (value is float) || (value is double);
         }
 
+        private static bool IsDictionary(object obj) 
+        {
+            if (obj == null)
+                return false;
+            return (obj.GetType().IsGenericType && obj.GetType().GetGenericTypeDefinition() == typeof(Dictionary<,>));
+        }
+
         private static void AssertProperties(string type, IDictionary<string, object> properties)
         {
             if (null == properties)
@@ -258,7 +315,7 @@ namespace ThinkingData.Analytics
                 if (KeyPattern.IsMatch(key))
                 {
                     if (!IsNumber(value) && !(value is string) && !(value is DateTime) && !(value is bool) &&
-                        !(value is IList))
+                        !(value is IList) && !IsDictionary(kvp.Value))
                     {
                         throw new ArgumentException(
                             "The supported data type including: Number, String, Date, Boolean,List. Invalid property: {key}");
@@ -300,16 +357,37 @@ namespace ThinkingData.Analytics
             }
 
             var eventProperties = new Dictionary<string, object>(properties);
-            if (type == "track" || type == "track_update" || type == "track_overwrite")
+            if (type == "track" || type == "track_update" || type == "track_overwrite"  || type == "track_first")
             {
+                foreach (var kvp in _dynamicPublicProperties.GetDynamicPublicProperties())
+                {
+                    if (!eventProperties.ContainsKey(kvp.Key))
+                    {
+                        eventProperties.Add(kvp.Key, kvp.Value);
+                    }
+                }
+
                 if (_pubicProperties != null)
                     lock (_pubicProperties)
                     {
                         foreach (var kvp in _pubicProperties)
                         {
-                            eventProperties.Add(kvp.Key, kvp.Value);
+                            if (!eventProperties.ContainsKey(kvp.Key))
+                            {
+                                eventProperties.Add(kvp.Key, kvp.Value);
+                            }
                         }
                     }
+
+                if (type == "track_first")
+                {
+                    type = "track";
+                    if (event_id != null)
+                    {
+                        eventProperties.Add("#first_check_id", event_id);
+                        event_id = null;
+                    }
+                }
             }
 
             var evt = new Dictionary<string, object>();

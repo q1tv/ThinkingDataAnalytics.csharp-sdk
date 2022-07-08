@@ -11,6 +11,39 @@
           "lib/net40/Newtonsoft.Json.dll": {}
         }
       }
+    },
+    ".NETFramework,Version=v4.0/win": {
+      "Newtonsoft.Json/12.0.3": {
+        "type": "package",
+        "compile": {
+          "lib/net40/Newtonsoft.Json.dll": {}
+        },
+        "runtime": {
+          "lib/net40/Newtonsoft.Json.dll": {}
+        }
+      }
+    },
+    ".NETFramework,Version=v4.0/win-x64": {
+      "Newtonsoft.Json/12.0.3": {
+        "type": "package",
+        "compile": {
+          "lib/net40/Newtonsoft.Json.dll": {}
+        },
+        "runtime": {
+          "lib/net40/Newtonsoft.Json.dll": {}
+        }
+      }
+    },
+    ".NETFramework,Version=v4.0/win-x86": {
+      "Newtonsoft.Json/12.0.3": {
+        "type": "package",
+        "compile": {
+          "lib/net40/Newtonsoft.Json.dll": {}
+        },
+        "runtime": {
+          "lib/net40/Newtonsoft.Json.dll": {}
+        }
+      }
     }
   },
   "libraries": {
@@ -52,20 +85,20 @@
     ]
   },
   "packageFolders": {
-    "/Users/sunzeyu/.nuget/packages/": {}
+    "/Users/halewang/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/sunzeyu/Work/Code/github/td/csharp-sdk/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj",
+      "projectUniqueName": "/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj",
       "projectName": "ThinkingdataAnalytics",
-      "projectPath": "/Users/sunzeyu/Work/Code/github/td/csharp-sdk/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj",
-      "packagesPath": "/Users/sunzeyu/.nuget/packages/",
-      "outputPath": "/Users/sunzeyu/Work/Code/github/td/csharp-sdk/ThinkingdataAnalytics/ThinkingdataAnalytics/obj/",
+      "projectPath": "/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj",
+      "packagesPath": "/Users/halewang/.nuget/packages/",
+      "outputPath": "/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/obj/",
       "projectStyle": "PackageReference",
       "skipContentFileWrite": true,
       "configFilePaths": [
-        "/Users/sunzeyu/.nuget/NuGet/NuGet.Config"
+        "/Users/halewang/.config/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net40"
@@ -87,6 +120,17 @@
             "version": "[12.0.3, )"
           }
         }
+      }
+    },
+    "runtimes": {
+      "win": {
+        "#import": []
+      },
+      "win-x64": {
+        "#import": []
+      },
+      "win-x86": {
+        "#import": []
       }
     }
   }

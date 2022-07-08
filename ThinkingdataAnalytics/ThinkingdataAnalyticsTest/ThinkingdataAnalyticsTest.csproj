@@ -42,13 +42,13 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\ThinkingdataAnalytics\ThinkingdataAnalytics.csproj">
-      <Project>{246f6c13-a07c-43a8-8e93-4cfecea2339a}</Project>
-      <Name>ThinkingdataAnalytics</Name>
-    </ProjectReference>
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
+    <ProjectReference Include="..\ThinkingdataAnalytics\ThinkingdataAnalytics.csproj">
+      <Project>{246F6C13-A07C-43A8-8E93-4CFECEA2339A}</Project>
+      <Name>ThinkingdataAnalytics</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

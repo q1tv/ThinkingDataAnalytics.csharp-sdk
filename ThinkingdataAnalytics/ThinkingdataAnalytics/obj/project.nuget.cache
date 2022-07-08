@@ -1,10 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "IUqGQKg7izu9CWSbNktTZLzHc6uhpdI0+tEf33YC9881nOUKMFobmo/kj5z9ezWSBj6mvzW1Kvkd1/HWKUdi2A==",
+  "dgSpecHash": "cKV2LmkCq9Vvvuw3dJKRiLca3SrKYw5mmXeaTpVuKK09qXwaQw018507gtLZ0BrxwLdsr4VMiDhyK/C1JAeonQ==",
   "success": true,
-  "projectFilePath": "/Users/sunzeyu/Work/Code/github/td/csharp-sdk/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj",
+  "projectFilePath": "/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/ThinkingdataAnalytics.csproj",
   "expectedPackageFiles": [
-    "/Users/sunzeyu/.nuget/packages/newtonsoft.json/12.0.3/newtonsoft.json.12.0.3.nupkg.sha512"
+    "/Users/halewang/.nuget/packages/newtonsoft.json/12.0.3/newtonsoft.json.12.0.3.nupkg.sha512"
   ],
   "logs": []
 }

@@ -4,16 +4,27 @@ using ThinkingData.Analytics;
 
 namespace ThinkingdataAnalyticsTest
 {
+    class DynamicPublicProperties : IDynamicPublicProperties
+    {
+        // 动态公共属性接口
+        public Dictionary<string, object> GetDynamicPublicProperties()
+        {
+            return new Dictionary<string, object>()
+            {
+                {"DynamicPublicProperty", DateTime.Now},
+            };
+        }
+    }
+
     class Program
     {
         static void Main(string[] args)
         {
             //LoggerConsumer,结合logbus使用，推荐这个
-            ThinkingdataAnalytics
-                ta = new ThinkingdataAnalytics(new LoggerConsumer("/Users/sunzeyu/test/test")); //默认按照天切分，无大小切分，适用于大多的情景
-//           ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/"));
-            // ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/",LoggerConsumer.RotateMode.HOURLY));//按小时切分，无大小切分
-            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/", LoggerConsumer.RotateMode.DAILY,5)); //按小时切分,按大小切分，大小单位为MB,等同于new LoggerConsumer("I:/log/logdata/",5)
+            ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("~/test/test")); //默认按照天切分，无大小切分，适用于大多的情景
+                                                                                                     //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/"));
+                                                                                                     //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/", LoggerConsumer.RotateMode.HOURLY)); //按小时切分，无大小切分
+                                                                                                     //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/", LoggerConsumer.RotateMode.DAILY,5)); //按小时切分,按大小切分，大小单位为MB,等同于new LoggerConsumer("I:/log/logdata/",5)
 
             //BatchConsumer
             //适用于小数量的历史数据使用
@@ -22,10 +33,21 @@ namespace ThinkingdataAnalyticsTest
             //如果是内网传输，可以按以下方式初始化,默认是true
             //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new BatchConsumer(你的接受端url,APPID,false));
 
+            //AsyncBatchConsumer
+            //批量异步上报数据
+            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new AsyncBatchConsumer(你的接受端url,APPID));
+
             //DebugConsumer，一条一条发送，适合测试数据是否错误
             //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new DebugConsumer(你的接受端url,APPID));
             //是否上传到TA库中
             //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new DebugConsumer(你的接受端url,APPID,true));
+
+            ta.SetDynamicPublicProperties(new DynamicPublicProperties());
+            ta.SetPublicProperties(new Dictionary<string, object>
+            {
+                {"PublicProperty", DateTime.Now},
+            });
+
             String distinctId = "AE75F92A-FB22-4150-86E7-385266F4E9";
             String accountId = "csharp"; //登录时传入accountId
 
@@ -33,6 +55,14 @@ namespace ThinkingdataAnalyticsTest
             dic1.Add("#ip", "123.123.123.123"); //可自动解析出城市省份
             dic1.Add("#time", DateTime.Now); //用户事件发生时刻,不用上传，默认是当前时间
             dic1.Add("id", 44);
+            //对象
+            Dictionary<string, Object> subDic1 = new Dictionary<string, object>();
+            subDic1.Add("subKey", "subValue");
+            dic1.Add("subDic", subDic1);
+            //对象组
+            List<Object> subList1 = new List<Object>();
+            subList1.Add(subDic1);
+            dic1.Add("subList", subList1);
 
             ta.Track(accountId, distinctId, "testEventName", dic1); //未登录状态下传入distinctId
 
@@ -51,12 +81,12 @@ namespace ThinkingdataAnalyticsTest
             dic2.Add("service_id", 0);
             ta.Track(accountId, distinctId, "testEventName2", dic2); //用户登录后与之前未登录的distinctid,进行绑定，详情可见官网
 
+            ta.TrackFirst(accountId, distinctId, "firstEventName", "firstEventId", dic2);
             ta.TrackUpdate(accountId, distinctId, "updateEventName", "updateEventId", dic2);
             ta.TrackOverwrite(accountId, distinctId, "overwriteEventName", "overwriteEventId", dic2);
-            dic2.Add("#first_check_id", "first_check_id");
-            ta.Track(accountId, distinctId, "first_check_id", dic2);
             //刷新数据，立即上报
             ta.Flush();
+
             //传入用户属性
             Dictionary<string, Object> dic3 = new Dictionary<string, object>();
             dic3.Add("login_name", "皮1");
@@ -95,9 +125,6 @@ namespace ThinkingdataAnalyticsTest
             ta.UserUnSet(accountId, distinctId, list2);
             //刷新数据，立即上报
             ta.Flush();
-            //刷新数据，立即上报
-            ta.Flush();
-
 
             Dictionary<string, Object> dic7 = new Dictionary<string, object>();
             dic7.Add("double1", (double) 1);
@@ -118,16 +145,19 @@ namespace ThinkingdataAnalyticsTest
             dictionary.Add("arrkey4", list6);
             ta.UserAppend(accountId, distinctId, dictionary);
 
+            //user_uniq_append,追加集合属性(对于重复元素进行去重处理)
+            ta.UserUniqAppend(accountId, distinctId, dictionary);
             //刷新数据，立即上报
             ta.Flush();
+
             //ta.UserSet(accountId, distinctId, dic7);
             //刷新数据，立即上报
-            ta.Flush();
+            //ta.Flush();
 
             //删除用户
             //ta.UserDelete(accountId, distinctId);
             //刷新数据，立即上报
-            ta.Flush();
+            //ta.Flush();
         }
     }
 }
