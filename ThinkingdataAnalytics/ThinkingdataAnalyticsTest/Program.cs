@@ -21,21 +21,26 @@ namespace ThinkingdataAnalyticsTest
         static void Main(string[] args)
         {
             //LoggerConsumer,结合logbus使用，推荐这个
-            ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("~/test/test")); //默认按照天切分，无大小切分，适用于大多的情景
-                                                                                                     //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/"));
-                                                                                                     //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/", LoggerConsumer.RotateMode.HOURLY)); //按小时切分，无大小切分
-                                                                                                     //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/", LoggerConsumer.RotateMode.DAILY,5)); //按小时切分,按大小切分，大小单位为MB,等同于new LoggerConsumer("I:/log/logdata/",5)
+            //默认按照天切分，无大小切分，适用于大多的情景
+            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("./test/log/"));
+
+            //按小时切分，无大小切分
+            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/", LoggerConsumer.RotateMode.HOURLY));
+
+            //按小时切分,按大小切分，大小单位为MB,等同于new LoggerConsumer("I:/log/logdata/",5)
+            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new LoggerConsumer("I:/log/logdata/", LoggerConsumer.RotateMode.DAILY,5));
 
             //BatchConsumer
             //适用于小数量的历史数据使用
-            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new BatchConsumer(你的接受端url,APPID));
+            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new BatchConsumer("https://receiver-ta-demo.thinkingdata.cn", "cf8bb16389af47bd9752b503142a7de9"));
 
             //如果是内网传输，可以按以下方式初始化,默认是true
             //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new BatchConsumer(你的接受端url,APPID,false));
 
             //AsyncBatchConsumer
             //批量异步上报数据
-            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new AsyncBatchConsumer(你的接受端url,APPID));
+            ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new AsyncBatchConsumer("https://receiver-ta-demo.thinkingdata.cn", "cf8bb16389af47bd9752b503142a7de9"));
+            TALogger.Enable = true;
 
             //DebugConsumer，一条一条发送，适合测试数据是否错误
             //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new DebugConsumer(你的接受端url,APPID));
@@ -158,6 +163,8 @@ namespace ThinkingdataAnalyticsTest
             //ta.UserDelete(accountId, distinctId);
             //刷新数据，立即上报
             //ta.Flush();
+
+            ta.Close();
         }
     }
 }

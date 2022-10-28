@@ -16,7 +16,7 @@ namespace ThinkingData.Analytics
 
     public class ThinkingdataAnalytics
     {
-        private const string LibVersion = "1.4.0";
+        private const string LibVersion = "1.5.0";
         private const string LibName = "tga_csharp_sdk";
 
         private static readonly Regex KeyPattern =
@@ -321,16 +321,6 @@ namespace ThinkingData.Analytics
                             "The supported data type including: Number, String, Date, Boolean,List. Invalid property: {key}");
                     }
 
-                    // IList<object> list = value as List<object>;
-                    // if (list != null)
-                    //     for (var i = 0; i < list.Count; i++)
-                    //     {
-                    //         if (list[i] is DateTime)
-                    //         {
-                    //             list[i] = (DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss.fff");
-                    //         }
-                    //     }
-
                     if (type == "user_add" && !IsNumber(value))
                     {
                         throw new ArgumentException("Only Number is allowed for user_add. Invalid property:" + key);
@@ -351,7 +341,7 @@ namespace ThinkingData.Analytics
         private void _Add(string account_id, string distinct_id, string type, string event_name, string event_id,
             IDictionary<string, object> properties)
         {
-            if (string.IsNullOrEmpty(account_id) && string.IsNullOrEmpty(distinct_id))
+            if (_consumer.IsStrict() && string.IsNullOrEmpty(account_id) && string.IsNullOrEmpty(distinct_id))
             {
                 throw new SystemException("account_id or distinct_id must be provided. ");
             }
@@ -359,11 +349,14 @@ namespace ThinkingData.Analytics
             var eventProperties = new Dictionary<string, object>(properties);
             if (type == "track" || type == "track_update" || type == "track_overwrite"  || type == "track_first")
             {
-                foreach (var kvp in _dynamicPublicProperties.GetDynamicPublicProperties())
+                if (_dynamicPublicProperties != null)
                 {
-                    if (!eventProperties.ContainsKey(kvp.Key))
+                    foreach (var kvp in _dynamicPublicProperties.GetDynamicPublicProperties())
                     {
-                        eventProperties.Add(kvp.Key, kvp.Value);
+                        if (!eventProperties.ContainsKey(kvp.Key))
+                        {
+                            eventProperties.Add(kvp.Key, kvp.Value);
+                        }
                     }
                 }
 
@@ -422,11 +415,21 @@ namespace ThinkingData.Analytics
                 evt.Add("#uuid", Guid.NewGuid().ToString("D"));
             }
 
-            AssertProperties(type, eventProperties);
+            if (_consumer.IsStrict())
+            {
+                AssertProperties(type, eventProperties);
+            }
+
             if (eventProperties.ContainsKey("#ip"))
             {
                 evt.Add("#ip", eventProperties["#ip"]);
                 eventProperties.Remove("#ip");
+            }
+
+            if (eventProperties.ContainsKey("#app_id"))
+            {
+                evt.Add("#app_id", eventProperties["#app_id"]);
+                eventProperties.Remove("#app_id");
             }
 
             //#first_check_id
@@ -435,17 +438,6 @@ namespace ThinkingData.Analytics
                 evt.Add("#first_check_id", eventProperties["#first_check_id"]);
                 eventProperties.Remove("#first_check_id");
             }
-
-            // if (properties != null)
-            // {
-            //     foreach (var kvp in properties)
-            //     {
-            //         if (kvp.Value is DateTime time)
-            //         {
-            //             eventProperties[kvp.Key] = time.ToString("yyyy-MM-dd HH:mm:ss.fff");
-            //         }
-            //     }
-            // }
 
             if (eventProperties.ContainsKey("#time"))
             {
@@ -460,6 +452,26 @@ namespace ThinkingData.Analytics
             evt.Add("#type", type);
             evt.Add("properties", eventProperties);
             _consumer.Send(evt);
+        }
+    }
+    public class TALogger
+    {
+        public static bool Enable = false;
+
+        public static void Log(string format, params object[] args)
+        {
+            if (Enable)
+            {
+                string prefix = string.Format("[TA][{0}]: ", (DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss"));
+                if (args != null)
+                {
+                    Console.WriteLine(prefix + format, args);
+                }
+                else
+                {
+                    Console.WriteLine(prefix + format, null, null);
+                }
+            }
         }
     }
 }

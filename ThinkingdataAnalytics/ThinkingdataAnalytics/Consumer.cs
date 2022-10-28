@@ -19,6 +19,9 @@ namespace ThinkingData.Analytics
         void Flush();
 
         void Close();
+
+        // 是否开启数据校验模式
+        bool IsStrict();
     }
 
     public class LoggerConsumer : IConsumer
@@ -140,8 +143,10 @@ namespace ThinkingData.Analytics
             {
                 try
                 {
-                    _messageBuffer.Append(JsonConvert.SerializeObject(message, _timeConverter));
+                    string jsonStr = JsonConvert.SerializeObject(message, _timeConverter);
+                    _messageBuffer.Append(jsonStr);
                     _messageBuffer.Append("\r\n");
+                    TALogger.Log("添加到缓存：\n{0}", jsonStr);
                 }
                 catch (Exception e)
                 {
@@ -163,6 +168,8 @@ namespace ThinkingData.Analytics
                 {
                     return;
                 }
+
+                TALogger.Log("写入文件");
 
                 var fileName = GetFileName();
 
@@ -216,6 +223,11 @@ namespace ThinkingData.Analytics
             if (_fileWriter == null) return;
             InnerLoggerFileWriter.RemoveInstance(_fileWriter);
             _fileWriter = null;
+        }
+
+        public bool IsStrict()
+        {
+            return false;
         }
 
         public class LogConfig
@@ -374,6 +386,9 @@ namespace ThinkingData.Analytics
             lock (_messageList)
             {
                 _messageList.Add(message);
+                
+                TALogger.Log("添加到缓存");
+
                 if (_messageList.Count >= _batchSize)
                 {
                     Flush();
@@ -443,10 +458,13 @@ namespace ThinkingData.Analytics
                     stream.Flush();
                 }
 
+                TALogger.Log("发送数据:\n{0}", dataStr);
+
                 var response = (HttpWebResponse) request.GetResponse();
 
                 var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
 
+                TALogger.Log("收到返回:\n{0}", responseString);
 
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
@@ -509,10 +527,16 @@ namespace ThinkingData.Analytics
         {
             Flush();
         }
+
+        public bool IsStrict()
+        {
+            return false;
+        }
     }
 
     public class AsyncBatchConsumer : IConsumer
     {
+
         private const int MaxFlushBatchSize = 20;
         private const int DefaultTimeOutSecond = 30;
 
@@ -532,6 +556,7 @@ namespace ThinkingData.Analytics
 
         private System.Threading.Semaphore _semaphore = new Semaphore(1, 1);
         private EventWaitHandle _waitHandle = new AutoResetEvent(false);
+        private EventWaitHandle _requestDone = new AutoResetEvent(false);
         private Thread _asyncThread;
 
         public AsyncBatchConsumer(string serverUrl, string appId) : this(serverUrl, appId, MaxFlushBatchSize,
@@ -603,6 +628,9 @@ namespace ThinkingData.Analytics
             lock (_messageList)
             {
                 _messageList.Add(message);
+
+                TALogger.Log("添加到缓存");
+                
                 if (_messageList.Count >= _batchSize)
                 {
                     Flush();
@@ -650,6 +678,8 @@ namespace ThinkingData.Analytics
                 WebRequest webRequest = (WebRequest)asyncResult.AsyncState;
                 HttpWebResponse response = webRequest.EndGetResponse(asyncResult) as HttpWebResponse;
                 var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
+
+                TALogger.Log("收到返回值:\n{0}", responseString);
 
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
@@ -720,6 +750,10 @@ namespace ThinkingData.Analytics
             {
                 Console.WriteLine(e + "\n [onRequest] Cannot post message to " + _url);
             }
+            finally
+            {
+                _requestDone.Set();
+            }
         }
 
         private void SendToServer(string dataStr)
@@ -728,6 +762,8 @@ namespace ThinkingData.Analytics
             {
                 var dataBytes = Encoding.UTF8.GetBytes(dataStr);
                 var dataCompressed = _compress ? Gzip(dataStr) : dataBytes;
+
+                TALogger.Log("发送数据:\n{0}", dataStr);
 
                 var request = (HttpWebRequest)WebRequest.Create(this._url);
                 request.Method = "POST";
@@ -742,6 +778,8 @@ namespace ThinkingData.Analytics
                 webRequest.BeginGetRequestStream(new AsyncCallback(onRequest), new Dictionary<string, object> {
                     { "webRequest", webRequest},
                     { "dataCompressed", dataCompressed} });
+                _requestDone.WaitOne();
+
                 webRequest.BeginGetResponse(new AsyncCallback(onResponse), webRequest);
             }
             catch (Exception e)
@@ -765,6 +803,11 @@ namespace ThinkingData.Analytics
         public void Close()
         {
             Flush();
+        }
+
+        public bool IsStrict()
+        {
+            return false;
         }
     }
 
@@ -794,6 +837,7 @@ namespace ThinkingData.Analytics
             this._appId = appId;
             this._requestTimeout = requestTimeout;
             this._writeData = writeData;
+            TALogger.Enable = true;
         }
 
         public void Send(Dictionary<string, object> message)
@@ -801,7 +845,7 @@ namespace ThinkingData.Analytics
             try
             {
                 var sendingData = JsonConvert.SerializeObject(message, _timeConverter);
-                Console.WriteLine(sendingData);
+                TALogger.Log("发送数据:\n{0}", sendingData);
                 SendToServer(sendingData);
             }
             catch (Exception exception)
@@ -845,6 +889,8 @@ namespace ThinkingData.Analytics
 
                 var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
 
+                TALogger.Log("收到返回值:\n{0}", responseString);
+
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new SystemException("C# SDK send response is not 200, content: " + responseString);
@@ -872,6 +918,11 @@ namespace ThinkingData.Analytics
 
         public void Close()
         {
+        }
+
+        public bool IsStrict()
+        {
+            return true;
         }
     }
 }

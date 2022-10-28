@@ -1,7 +1,0 @@
-/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/bin/Release/ThinkingdataAnalytics.dll
-/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/bin/Release/ThinkingdataAnalytics.pdb
-/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/bin/Release/Newtonsoft.Json.dll
-/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/obj/Release/ThinkingdataAnalytics.csproj.CoreCompileInputs.cache
-/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/obj/Release/ThinkingdataAnalytics.csproj.CopyComplete
-/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/obj/Release/ThinkingdataAnalytics.dll
-/Users/halewang/Desktop/SDK/csharp/ThinkingdataAnalytics/ThinkingdataAnalytics/obj/Release/ThinkingdataAnalytics.pdb
