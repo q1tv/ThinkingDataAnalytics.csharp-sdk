@@ -1,0 +1,8 @@
+C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalytics\bin\Release\ThinkingdataAnalytics.dll
+C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalytics\bin\Release\ThinkingdataAnalytics.pdb
+C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalytics\bin\Release\Newtonsoft.Json.dll
+C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalytics\obj\Release\ThinkingdataAnalytics.csproj.AssemblyReference.cache
+C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalytics\obj\Release\ThinkingdataAnalytics.csproj.CoreCompileInputs.cache
+C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalytics\obj\Release\ThinkingdataAnalytics.csproj.CopyComplete
+C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalytics\obj\Release\ThinkingdataAnalytics.dll
+C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalytics\obj\Release\ThinkingdataAnalytics.pdb
