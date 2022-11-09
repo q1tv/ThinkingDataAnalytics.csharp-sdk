@@ -18,3 +18,13 @@ C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyti
 C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\obj\Release\ThinkingdataAnalyticsTest.csproj.CopyComplete
 C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\obj\Release\ThinkingdataAnalyticsTest.exe
 C:\Users\ios_m\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\obj\Release\ThinkingdataAnalyticsTest.pdb
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\bin\Release\ThinkingdataAnalyticsTest.exe
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\bin\Release\ThinkingdataAnalyticsTest.pdb
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\bin\Release\ThinkingdataAnalytics.dll
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\bin\Release\Newtonsoft.Json.dll
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\bin\Release\ThinkingdataAnalytics.pdb
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\obj\Release\ThinkingdataAnalyticsTest.csproj.AssemblyReference.cache
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\obj\Release\ThinkingdataAnalyticsTest.csproj.CoreCompileInputs.cache
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\obj\Release\ThinkingdataAnalyticsTest.csproj.CopyComplete
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\obj\Release\ThinkingdataAnalyticsTest.exe
+D:\Code\thinkingdata\csharp-sdk\ThinkingdataAnalytics\ThinkingdataAnalyticsTest\obj\Release\ThinkingdataAnalyticsTest.pdb

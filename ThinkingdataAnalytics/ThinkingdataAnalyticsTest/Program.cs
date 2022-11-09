@@ -43,8 +43,8 @@ namespace ThinkingdataAnalyticsTest
 
             //DebugConsumer，一条一条发送，适合测试数据是否错误
             //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new DebugConsumer(你的接受端url,APPID));
-            //是否上传到TA库中
-            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new DebugConsumer(你的接受端url,APPID,true));
+            //是否上传到TA库中；支持在TA后台进行数据调试
+            //ThinkingdataAnalytics ta = new ThinkingdataAnalytics(new DebugConsumer(你的接受端url,APPID,true, "deviceId"));
 
             ta.SetDynamicPublicProperties(new DynamicPublicProperties());
             ta.SetPublicProperties(new Dictionary<string, object>

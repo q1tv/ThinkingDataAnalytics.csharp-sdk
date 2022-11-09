@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "1xkmYClqssRYSbfN2Yfvej6ZfUxcTInIRkbdU1D/J5xF4GZeXEhlIz1Am4FdL3sgKOxRrlpEJ7w6yfNAkqh7xA==",
+  "dgSpecHash": "crZHyVVtUPUk963o21TuE/jm60akYFeUkBTJqDPWro0/jzP56AmJSddXsP7pV0ztj60rgWJO3b/jJye64OcXgw==",
   "success": true,
-  "projectFilePath": "C:\\Users\\ios_m\\thinkingdata\\csharp-sdk\\ThinkingdataAnalytics\\ThinkingdataAnalytics\\ThinkingdataAnalytics.csproj",
+  "projectFilePath": "D:\\Code\\thinkingdata\\csharp-sdk\\ThinkingdataAnalytics\\ThinkingdataAnalytics\\ThinkingdataAnalytics.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\ios_m\\.nuget\\packages\\newtonsoft.json\\12.0.3\\newtonsoft.json.12.0.3.nupkg.sha512"
   ],

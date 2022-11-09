@@ -106,11 +106,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\ios_m\\thinkingdata\\csharp-sdk\\ThinkingdataAnalytics\\ThinkingdataAnalytics\\ThinkingdataAnalytics.csproj",
+      "projectUniqueName": "D:\\Code\\thinkingdata\\csharp-sdk\\ThinkingdataAnalytics\\ThinkingdataAnalytics\\ThinkingdataAnalytics.csproj",
       "projectName": "ThinkingdataAnalytics",
-      "projectPath": "C:\\Users\\ios_m\\thinkingdata\\csharp-sdk\\ThinkingdataAnalytics\\ThinkingdataAnalytics\\ThinkingdataAnalytics.csproj",
+      "projectPath": "D:\\Code\\thinkingdata\\csharp-sdk\\ThinkingdataAnalytics\\ThinkingdataAnalytics\\ThinkingdataAnalytics.csproj",
       "packagesPath": "C:\\Users\\ios_m\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\ios_m\\thinkingdata\\csharp-sdk\\ThinkingdataAnalytics\\ThinkingdataAnalytics\\obj\\",
+      "outputPath": "D:\\Code\\thinkingdata\\csharp-sdk\\ThinkingdataAnalytics\\ThinkingdataAnalytics\\obj\\",
       "projectStyle": "PackageReference",
       "skipContentFileWrite": true,
       "configFilePaths": [

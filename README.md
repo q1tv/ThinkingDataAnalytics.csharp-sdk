@@ -4,9 +4,9 @@
 
 
 
-**最新版本为：** 1.5.0
+**最新版本为：** 1.5.1
 
-**更新时间为：** 2022-10-28
+**更新时间为：** 2022-11-09
 
 **[C# SDK下载地址](http://download.thinkingdata.cn/server/release/ta_csharp_sdk.zip)**
 

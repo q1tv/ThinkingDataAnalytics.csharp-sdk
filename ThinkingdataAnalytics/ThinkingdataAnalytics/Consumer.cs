@@ -818,6 +818,7 @@ namespace ThinkingData.Analytics
         private readonly string _appId;
         private readonly int _requestTimeout;
         private readonly bool _writeData;
+        private readonly string _deviceId;
 
         private readonly IsoDateTimeConverter _timeConverter = new IsoDateTimeConverter
             {DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff"};
@@ -826,17 +827,26 @@ namespace ThinkingData.Analytics
         {
         }
 
-        public DebugConsumer(string serverUrl, string appId, bool writeData) : this(serverUrl, appId, 30000, writeData)
+        public DebugConsumer(string serverUrl, string appId, bool writeData) : this(serverUrl, appId, 30000, null, writeData)
         {
         }
 
-        public DebugConsumer(string serverUrl, string appId, int requestTimeout, bool writeData = true)
+        public DebugConsumer(string serverUrl, string appId, bool writeData, string deviceId) : this(serverUrl, appId, 30000, deviceId, writeData) 
+        { 
+        }
+
+        public DebugConsumer(string serverUrl, string appId, int requestTimeout, bool writeData = true): this(serverUrl, appId, requestTimeout, null, writeData)
+        {
+        }
+
+        public DebugConsumer(string serverUrl, string appId, int requestTimeout, string deviceId, bool writeData = true)
         {
             var relativeUri = new Uri("/data_debug", UriKind.Relative);
             _url = new Uri(new Uri(serverUrl), relativeUri).AbsoluteUri;
             this._appId = appId;
             this._requestTimeout = requestTimeout;
             this._writeData = writeData;
+            this._deviceId = deviceId;
             TALogger.Enable = true;
         }
 
@@ -873,6 +883,10 @@ namespace ThinkingData.Analytics
 
                 var postData = "appid=" + _appId + "&source=server&dryRun=" + dryRun + "&data=" + dataStr;
 
+                if (_deviceId != null)
+                {
+                    postData += "&deviceId=" + _deviceId;
+                }
 
                 var data = Encoding.UTF8.GetBytes(postData);
 
