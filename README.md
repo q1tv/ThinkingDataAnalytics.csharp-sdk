@@ -5,4 +5,5 @@ This is the [ThinkingData](https://www.thinkingdata.cn)™ SDK for CSharp-Server
 
 - [中文](https://docs.thinkingdata.cn/ta-manual/latest/installation/installation_menu/server_sdk/csharp_sdk_installation/csharp_sdk_installation.html)
 - [English](https://docs.thinkingdata.cn/ta-manual/latest/en/99oQ5UeGzK09DWfPCaQwCg/installation/server_sdk/csharp_sdk_installation/csharp_sdk_installation.html)
+- [日本語](https://docs.thinkingdata.io/ta-manual/v4.0/ja/installation/installation_menu/server_sdk/c_sdk_installation/c_sdk_installation.html)
 ---
