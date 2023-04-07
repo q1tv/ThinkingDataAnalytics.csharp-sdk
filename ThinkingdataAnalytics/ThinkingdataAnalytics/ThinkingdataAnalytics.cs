@@ -4,11 +4,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
+
 namespace ThinkingData.Analytics
 {
-    /* 
-     * 动态公共属性
-     */
+
+    /// <summary>
+    /// dynamic common properties interface
+    /// </summary>
     public interface IDynamicPublicProperties
     {
         Dictionary<string, object> GetDynamicPublicProperties();
@@ -16,8 +18,8 @@ namespace ThinkingData.Analytics
 
     public class ThinkingdataAnalytics
     {
-        private const string LibVersion = "1.5.1";
-        private const string LibName = "tga_csharp_sdk";
+        public const string LibVersion = "1.5.2";
+        public const string LibName = "tga_csharp_sdk";
 
         private static readonly Regex KeyPattern =
             new Regex("^(#[a-z][a-z0-9_]{0,49})|([a-z][a-z0-9_]{0,50})$", RegexOptions.IgnoreCase);
@@ -31,14 +33,19 @@ namespace ThinkingData.Analytics
         private IDynamicPublicProperties _dynamicPublicProperties;
 
 
-        /*
-         * 实例化tga类，接收一个Consumer的一个实例化对象
-         * @param consumer	BatchConsumer,LoggerConsumer实例
-        */
+        /// <summary>
+        /// init SDK with consumer
+        /// </summary>
+        /// <param name="consumer">data consumer</param>
         public ThinkingdataAnalytics(IConsumer consumer) : this(consumer, false)
         {
         }
 
+        /// <summary>
+        /// init SDK with consumer
+        /// </summary>
+        /// <param name="consumer">data consumer</param>
+        /// <param name="enableUuid">enable uuid</param>
         public ThinkingdataAnalytics(IConsumer consumer, bool enableUuid)
         {
             _consumer = consumer;
@@ -47,10 +54,10 @@ namespace ThinkingData.Analytics
             ClearPublicProperties();
         }
 
-        /*
-        * 公共属性只用于track接口，其他接口无效，且每次都会自动向track事件中添加公共属性
-        * @param properties	公共属性
-        */
+        /// <summary>
+        /// set public properties
+        /// </summary>
+        /// <param name="properties">custom public properties</param>
         public void SetPublicProperties(Dictionary<string, object> properties)
         {
             lock (_pubicProperties)
@@ -62,9 +69,9 @@ namespace ThinkingData.Analytics
             }
         }
 
-        /*
-	     * 清理掉公共属性，之后track属性将不会再加入公共属性
-	     */
+        /// <summary>
+        /// clear public properties
+        /// </summary>
         public void ClearPublicProperties()
         {
             lock (_pubicProperties)
@@ -75,45 +82,54 @@ namespace ThinkingData.Analytics
             }
         }
 
+        /// <summary>
+        /// set dynamic public properties
+        /// </summary>
+        /// <param name="dynamicPublicProperties">object which implements IDynamicPublicProperties</param>
         public void SetDynamicPublicProperties(IDynamicPublicProperties dynamicPublicProperties)
         {
             _dynamicPublicProperties = dynamicPublicProperties;
         }
 
-            // 记录一个没有任何属性的事件
-            public void Track(string account_id, string distinct_id, string event_name)
+        /// <summary>
+        /// report ordinary event
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="event_name">event name</param>
+        public void Track(string account_id, string distinct_id, string event_name)
         {
-            _Add(account_id, distinct_id, "track", event_name, null, null);
+            Add(account_id, distinct_id, "track", event_name, null, null);
         }
 
-        /*
-	    * 用户事件属性(注册)
-	    * @param	account_id	账号ID
-	    * @param	distinct_id	匿名ID
-	    * @param	event_name	事件名称
-	    * @param	properties	事件属性
-	    */
-        public void Track(string account_id, string distinct_id, string event_name,
-            Dictionary<string, object> properties)
+        /// <summary>
+        /// report ordinary event
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="event_name">event name</param>
+        /// <param name="properties">properties</param>
+        /// <exception cref="SystemException">SystemException</exception>
+        public void Track(string account_id, string distinct_id, string event_name, Dictionary<string, object> properties)
         {
             if (string.IsNullOrEmpty(event_name))
             {
                 throw new SystemException("The event name must be provided.");
             }
 
-            _Add(account_id, distinct_id, "track", event_name, null, properties);
+            Add(account_id, distinct_id, "track", event_name, null, properties);
         }
 
-        /*
-        * 首次事件属性
-        * @param	account_id	    账号ID
-        * @param	distinct_id	    匿名ID
-        * @param	event_name	    事件名称
-        * @param    first_check_id  事件ID
-        * @param	properties	    事件属性
-        */
-        public void TrackFirst(string account_id, string distinct_id, string event_name, string first_check_id,
-            Dictionary<string, object> properties)
+        /// <summary>
+        /// report first event
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="event_name">event name</param>
+        /// <param name="first_check_id">it is flag of the first event</param>
+        /// <param name="properties">properties</param>
+        /// <exception cref="SystemException">SystemException</exception>
+        public void TrackFirst(string account_id, string distinct_id, string event_name, string first_check_id, Dictionary<string, object> properties)
         {
             if (string.IsNullOrEmpty(event_name))
             {
@@ -125,18 +141,19 @@ namespace ThinkingData.Analytics
                 throw new SystemException("The first check id must be provided.");
             }
 
-            _Add(account_id, distinct_id, "track_first", event_name, first_check_id, properties);
+            Add(account_id, distinct_id, "track_first", event_name, first_check_id, properties);
         }
-        /*
-	    * 可更新事件属性
-	    * @param	account_id	账号ID
-	    * @param	distinct_id	匿名ID
-	    * @param	event_name	事件名称
-        * @param    event_id    事件ID
-	    * @param	properties	事件属性
-	    */
-        public void TrackUpdate(string account_id, string distinct_id, string event_name, string event_id,
-            Dictionary<string, object> properties)
+
+        /// <summary>
+        /// report updatable event
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="event_name">event name</param>
+        /// <param name="event_id">event id</param>
+        /// <param name="properties">properties</param>
+        /// <exception cref="SystemException">SystemException</exception>
+        public void TrackUpdate(string account_id, string distinct_id, string event_name, string event_id, Dictionary<string, object> properties)
         {
             if (string.IsNullOrEmpty(event_name))
             {
@@ -148,19 +165,19 @@ namespace ThinkingData.Analytics
                 throw new SystemException("The event id must be provided.");
             }
 
-            _Add(account_id, distinct_id, "track_update", event_name, event_id, properties);
+            Add(account_id, distinct_id, "track_update", event_name, event_id, properties);
         }
 
-        /*
-	    * 可重写事件属性
-	    * @param	account_id	账号ID
-	    * @param	distinct_id	匿名ID
-	    * @param	event_name	事件名称
-        * @param    event_id    事件ID
-	    * @param	properties	事件属性
-	    */
-        public void TrackOverwrite(string account_id, string distinct_id, string event_name, string event_id,
-            Dictionary<string, object> properties)
+        /// <summary>
+        /// report overridable event
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="event_name">event name</param>
+        /// <param name="event_id">event id</param>
+        /// <param name="properties">properties</param>
+        /// <exception cref="SystemException">SystemException</exception>
+        public void TrackOverwrite(string account_id, string distinct_id, string event_name, string event_id, Dictionary<string, object> properties)
         {
             if (string.IsNullOrEmpty(event_name))
             {
@@ -172,111 +189,123 @@ namespace ThinkingData.Analytics
                 throw new SystemException("The event id must be provided.");
             }
 
-            _Add(account_id, distinct_id, "track_overwrite", event_name, event_id, properties);
+            Add(account_id, distinct_id, "track_overwrite", event_name, event_id, properties);
         }
 
-        /*
-         * 设置用户属性，如果已经存在，则覆盖，否则，新创建
-         * @param	account_id	账号ID
-         * @param	distinct_id	匿名ID
-         * @param	properties	增加的用户属性
-	     */
+        /// <summary>
+        /// set user properties. would overwrite existing names
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="properties">properties</param>
         public void UserSet(string account_id, string distinct_id, Dictionary<string, object> properties)
         {
-            _Add(account_id, distinct_id, "user_set", properties);
+            Add(account_id, distinct_id, "user_set", properties);
         }
 
-        /*
-        * 删除用户属性
-        * @param account_id 账号 ID
-        * @param distinct_id 访客 ID
-        * @param properties 用户属性
-        */
+        /// <summary>
+        /// clear the user properties of users
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="properties">propertie keys list</param>
         public void UserUnSet(string account_id, string distinct_id, List<string> properties)
         {
             var props = properties.ToDictionary<string, string, object>(property => property, property => 0);
-            _Add(account_id, distinct_id, "user_unset", props);
+            Add(account_id, distinct_id, "user_unset", props);
         }
 
-        /**
-          * 设置用户属性，首次设置用户的属性,如果该属性已经存在,该操作为无效.
-          * @param	account_id	账号ID
-          * @param	distinct_id	匿名ID
-          * @param	properties	增加的用户属性
-         */
+        /// <summary>
+        /// set user properties, If such property had been set before, this message would be ingored
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="properties">properties</param>
         public void UserSetOnce(string account_id, string distinct_id, Dictionary<string, object> properties)
         {
-            _Add(account_id, distinct_id, "user_setOnce", properties);
+            Add(account_id, distinct_id, "user_setOnce", properties);
         }
 
-        /**
-          * 首次设置用户的属性。这个接口只能设置单个key对应的内容。
-          * @param	account_id	账号ID
-          * @param	distinct_id	匿名ID
-          * @param	properties	增加的用户属性
-         */
+        /// <summary>
+        /// set user properties once, If such property had been set before, this message would be ingored
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="property">key</param>
+        /// <param name="value">value</param>
         public void UserSetOnce(string account_id, string distinct_id, string property, object value)
         {
             var properties = new Dictionary<string, object> {{property, value}};
-            _Add(account_id, distinct_id, "user_setOnce", properties);
+            Add(account_id, distinct_id, "user_setOnce", properties);
         }
 
-        /*
-          * 用户属性修改，只支持数字属性增加的接口
-          * @param	account_id	账号ID
-          * @param	distinct_id	匿名ID
-          * @param	properties	增加的用户属性
-         */
+        /// <summary>
+        /// to accumulate operations against the property
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="properties">properties</param>
         public void UserAdd(string account_id, string distinct_id, Dictionary<string, object> properties)
         {
-            _Add(account_id, distinct_id, "user_add", properties);
+            Add(account_id, distinct_id, "user_add", properties);
         }
 
+        /// <summary>
+        /// to accumulate operations against the property
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="property">key</param>
+        /// <param name="value">value</param>
         public void UserAdd(string account_id, string distinct_id, string property, long value)
         {
             var properties = new Dictionary<string, object> {{property, value}};
-            _Add(account_id, distinct_id, "user_add", properties);
+            Add(account_id, distinct_id, "user_add", properties);
         }
 
-        /*
-          * 追加用户的集合类型的一个或多个属性
-          * @param	account_id	账号ID
-          * @param	distinct_id	匿名ID
-          * @param	properties	增加的用户属性
-         */
+        /// <summary>
+        /// to add user properties of array type
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="properties">properties</param>
         public void UserAppend(string account_id, string distinct_id, Dictionary<string, object> properties)
         {
-            _Add(account_id, distinct_id, "user_append", properties);
+            Add(account_id, distinct_id, "user_append", properties);
         }
 
-        /*
-          * 追加用户的集合类型的一个或多个属性(对于重复元素进行去重处理)
-          * @param	account_id	账号ID
-          * @param	distinct_id	匿名ID
-          * @param	properties	增加的用户属性
-         */
+        /// <summary>
+        /// append user properties to array type by unique
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
+        /// <param name="properties">properties</param>
         public void UserUniqAppend(string account_id, string distinct_id, Dictionary<string, object> properties)
         {
-            _Add(account_id, distinct_id, "user_uniq_append", properties);
+            Add(account_id, distinct_id, "user_uniq_append", properties);
         }
 
-        /**
-         * 用户删除,此操作不可逆
-         * @param 	account_id	账号ID
-         * @param	distinct_id	匿名ID
-        */
+        /// <summary>
+        /// delete a user, This operation cannot be undone
+        /// </summary>
+        /// <param name="account_id">account id</param>
+        /// <param name="distinct_id">distinct id</param>
         public void UserDelete(string account_id, string distinct_id)
         {
-            _Add(account_id, distinct_id, "user_del", new Dictionary<string, object>());
+            Add(account_id, distinct_id, "user_del", new Dictionary<string, object>());
         }
 
-        /// 立即发送缓存中的所有日志
+        /// <summary>
+        /// report data immediately
+        /// </summary>
         public void Flush()
         {
             _consumer.Flush();
         }
 
-        //关闭并退出 sdk 所有线程，停止前会清空所有本地数据
+        /// <summary>
+        /// close and exit sdk
+        /// </summary>
         public void Close()
         {
             _consumer.Close();
@@ -291,8 +320,7 @@ namespace ThinkingData.Analytics
 
         private static bool IsDictionary(object obj) 
         {
-            if (obj == null)
-                return false;
+            if (obj == null) return false;
             return (obj.GetType().IsGenericType && obj.GetType().GetGenericTypeDefinition() == typeof(Dictionary<,>));
         }
 
@@ -333,12 +361,12 @@ namespace ThinkingData.Analytics
             }
         }
 
-        private void _Add(string account_id, string distinct_id, string type, IDictionary<string, object> properties)
+        private void Add(string account_id, string distinct_id, string type, IDictionary<string, object> properties)
         {
-            _Add(account_id, distinct_id, type, null, null, properties);
+            Add(account_id, distinct_id, type, null, null, properties);
         }
 
-        private void _Add(string account_id, string distinct_id, string type, string event_name, string event_id,
+        private void Add(string account_id, string distinct_id, string type, string event_name, string event_id,
             IDictionary<string, object> properties)
         {
             if (_consumer.IsStrict() && string.IsNullOrEmpty(account_id) && string.IsNullOrEmpty(distinct_id))
@@ -351,6 +379,7 @@ namespace ThinkingData.Analytics
             {
                 if (_dynamicPublicProperties != null)
                 {
+                    
                     foreach (var kvp in _dynamicPublicProperties.GetDynamicPublicProperties())
                     {
                         if (!eventProperties.ContainsKey(kvp.Key))
@@ -361,6 +390,7 @@ namespace ThinkingData.Analytics
                 }
 
                 if (_pubicProperties != null)
+                {
                     lock (_pubicProperties)
                     {
                         foreach (var kvp in _pubicProperties)
@@ -371,6 +401,7 @@ namespace ThinkingData.Analytics
                             }
                         }
                     }
+                }
 
                 if (type == "track_first")
                 {
@@ -404,7 +435,7 @@ namespace ThinkingData.Analytics
                 evt.Add("#event_id", event_id);
             }
 
-            //#uuid 只支持UUID标准格式xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+            // #uuid v4 formater is only supported
             if (eventProperties.ContainsKey("#uuid"))
             {
                 evt.Add("#uuid", eventProperties["#uuid"]);
@@ -431,8 +462,7 @@ namespace ThinkingData.Analytics
                 evt.Add("#app_id", eventProperties["#app_id"]);
                 eventProperties.Remove("#app_id");
             }
-
-            //#first_check_id
+          
             if (eventProperties.ContainsKey("#first_check_id"))
             {
                 evt.Add("#first_check_id", eventProperties["#first_check_id"]);
@@ -454,9 +484,10 @@ namespace ThinkingData.Analytics
             _consumer.Send(evt);
         }
     }
+
     public class TALogger
     {
-        public static bool Enable = false;
+        public static bool Enable { get; set; }
 
         public static void Log(string format, params object[] args)
         {

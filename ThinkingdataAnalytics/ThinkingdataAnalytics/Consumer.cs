@@ -9,6 +9,7 @@ using System.IO.Compression;
 using System.Timers;
 using Newtonsoft.Json.Converters;
 using Timer = System.Timers.Timer;
+using System.Net.Http;
 
 namespace ThinkingData.Analytics
 {
@@ -20,7 +21,10 @@ namespace ThinkingData.Analytics
 
         void Close();
 
-        // 是否开启数据校验模式
+        /// <summary>
+        /// enable local check or not
+        /// </summary>
+        /// <returns>true: enable check</returns>
         bool IsStrict();
     }
 
@@ -31,7 +35,7 @@ namespace ThinkingData.Analytics
         private const int DefaultBatchSec = 10;
         private const int DefaultFileSize = -1;
         private const RotateMode DefaultRotateMode = RotateMode.DAILY;
-        private const bool DefaultAsync = true;
+        private const bool DefaultAsync = false;
 
         private readonly IsoDateTimeConverter _timeConverter = new IsoDateTimeConverter
         {
@@ -46,17 +50,21 @@ namespace ThinkingData.Analytics
         private readonly bool _async;
         private readonly RotateMode _rotateHourly;
 
-        private Timer _timer;
-        private long _sendTimer = -1;
+        private readonly Timer _timer;
+        private long _lastSendTime = -1;
         private readonly StringBuilder _messageBuffer;
         private InnerLoggerFileWriter _fileWriter;
 
         public enum RotateMode
         {
-            /** 按日切分 */
+            /// <summary>
+            /// rotate by the day
+            /// </summary>
             DAILY,
 
-            /** 按小时切分 */
+            /// <summary>
+            /// rotate by the hour
+            /// </summary>
             HOURLY
         }
 
@@ -109,19 +117,19 @@ namespace ThinkingData.Analytics
             _fileSize = fileSize;
             _fileNamePrefix = fileNamePrefix;
             _bufferSize = bufferSize;
-            _batchSec = batchSec;
             _async = async;
             _messageBuffer = new StringBuilder(bufferSize);
-            if (!async) return;
+            if (!_async) return;
             _batchSec = batchSec * 1000;
             _timer = new Timer {Enabled = true, Interval = 1000};
             _timer.Start();
-            _timer.Elapsed += task;
+            _timer.Elapsed += Task;
+            _lastSendTime = CurrentTimeMillis();
         }
 
-        private void task(object source, ElapsedEventArgs args)
+        private void Task(object source, ElapsedEventArgs args)
         {
-            if (_sendTimer == -1 || (CurrentTimeMillis() - _sendTimer < _batchSec)) return;
+            if (CurrentTimeMillis() - _lastSendTime < _batchSec) return;
             try
             {
                 Flush();
@@ -146,7 +154,7 @@ namespace ThinkingData.Analytics
                     string jsonStr = JsonConvert.SerializeObject(message, _timeConverter);
                     _messageBuffer.Append(jsonStr);
                     _messageBuffer.Append("\r\n");
-                    TALogger.Log("添加到缓存：\n{0}", jsonStr);
+                    TALogger.Log("add to buffer: \n{0}", jsonStr);
                 }
                 catch (Exception e)
                 {
@@ -169,7 +177,7 @@ namespace ThinkingData.Analytics
                     return;
                 }
 
-                TALogger.Log("写入文件");
+                TALogger.Log("write to file");
 
                 var fileName = GetFileName();
 
@@ -186,7 +194,7 @@ namespace ThinkingData.Analytics
 
                 if (!_fileWriter.Write(_messageBuffer)) return;
                 _messageBuffer.Length = 0;
-                _sendTimer = -1;
+                _lastSendTime = CurrentTimeMillis();
             }
         }
 
@@ -337,32 +345,42 @@ namespace ThinkingData.Analytics
         private readonly int _requestTimeoutMillisecond;
         private readonly bool _throwException;
         private readonly bool _compress;
+        private readonly HttpClient _httpClient = new HttpClient();
 
         public BatchConsumer(string serverUrl, string appId) : this(serverUrl, appId, MaxFlushBatchSize,
             DefaultTimeOutSecond, false, true)
         {
         }
 
-        /**
-         * 数据是否需要压缩，compress 内网可设置 false
-         */
+        /// <summary>
+        /// init BatchConsumer
+        /// </summary>
+        /// <param name="serverUrl">serverUrl</param>
+        /// <param name="appId">appId</param>
+        /// <param name="compress">date compress or not</param>
         public BatchConsumer(string serverUrl, string appId, bool compress) : this(serverUrl, appId, MaxFlushBatchSize,
             DefaultTimeOutSecond, false, compress)
         {
         }
 
-        /**
-         * batchSize 每次flush到TA的数据条数，默认20条
-         */
+        /// <summary>
+        /// init BatchConsumer
+        /// </summary>
+        /// <param name="serverUrl">serverUrl</param>
+        /// <param name="appId">appId</param>
+        /// <param name="batchSize">flush event count each time</param>
         public BatchConsumer(string serverUrl, string appId, int batchSize) : this(serverUrl, appId, batchSize,
             DefaultTimeOutSecond)
         {
         }
 
-        /**
-         * batchSize 每次flush到TA的数据条数，默认20条
-         * requestTimeoutSecond 发送服务器请求时间设置，默认30s
-         */
+        /// <summary>
+        /// init BatchConsumer
+        /// </summary>
+        /// <param name="serverUrl">serverUrl</param>
+        /// <param name="appId">appId</param>
+        /// <param name="batchSize">flush event count each time</param>
+        /// <param name="requestTimeoutSecond">http timeout</param>
         public BatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond) : this(serverUrl,
             appId, batchSize, requestTimeoutSecond, false)
         {
@@ -379,6 +397,15 @@ namespace ThinkingData.Analytics
             this._throwException = throwException;
             this._compress = compress;
             this._requestTimeoutMillisecond = requestTimeoutSecond * 1000;
+
+            _httpClient.Timeout = TimeSpan.FromMilliseconds(_requestTimeoutMillisecond);
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("TA-Integration-Type", ThinkingdataAnalytics.LibName);
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("TA-Integration-Version", ThinkingdataAnalytics.LibVersion);
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("user-agent", "C# SDK");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("version", ThinkingdataAnalytics.LibVersion);
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("appid", _appId);
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("compress", _compress ? "gzip" : "none");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Content-Type", "text/plain");
         }
 
         public void Send(Dictionary<string, object> message)
@@ -387,7 +414,7 @@ namespace ThinkingData.Analytics
             {
                 _messageList.Add(message);
                 
-                TALogger.Log("添加到缓存");
+                TALogger.Log("add to buffer");
 
                 if (_messageList.Count >= _batchSize)
                 {
@@ -438,41 +465,24 @@ namespace ThinkingData.Analytics
             }
         }
 
-        private void SendToServer(string dataStr)
+        private async void SendToServer(string dataStr)
         {
             try
             {
-                var dataBytes = Encoding.UTF8.GetBytes(dataStr);
-                var dataCompressed = _compress ? Gzip(dataStr) : dataBytes;
+                TALogger.Log("send request:\n{0}", dataStr);
 
-                var request = (HttpWebRequest) WebRequest.Create(this._url);
-                request.Method = "POST";
-                request.ReadWriteTimeout = _requestTimeoutMillisecond;
-                request.Timeout = _requestTimeoutMillisecond;
-                request.UserAgent = "C# SDK";
-                request.Headers.Set("appid", _appId);
-                request.Headers.Set("compress", _compress ? "gzip" : "none");
-                using (var stream = request.GetRequestStream())
-                {
-                    stream.Write(dataCompressed, 0, dataCompressed.Length);
-                    stream.Flush();
-                }
+                byte[] dataBytes = _compress ? Gzip(dataStr) : Encoding.UTF8.GetBytes(dataStr);
 
-                TALogger.Log("发送数据:\n{0}", dataStr);
+                var response = await _httpClient.PostAsync(_url, new ByteArrayContent(dataBytes));
+                var responseString = await response.Content.ReadAsStringAsync();
+                TALogger.Log("response:\n{0}", responseString);
 
-                var response = (HttpWebResponse) request.GetResponse();
-
-                var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
-
-                TALogger.Log("收到返回:\n{0}", responseString);
+                var resultJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(responseString);
 
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw new SystemException("C# SDK send response is not 200, content: " + responseString);
                 }
-
-                response.Close();
-                var resultJson = JsonConvert.DeserializeObject<Dictionary<object, object>>(responseString);
 
                 int code = Convert.ToInt32(resultJson["code"]);
 
@@ -480,35 +490,46 @@ namespace ThinkingData.Analytics
                 {
                     if (code == -1)
                     {
-                        throw new SystemException("error msg:" +
+                        if (this._throwException)
+                        {
+                            throw new SystemException("error msg:" +
                                                   (resultJson.ContainsKey("msg")
                                                       ? resultJson["msg"]
                                                       : "invalid data format"));
+                        }
                     }
                     else if (code == -2)
                     {
-                        throw new SystemException("error msg:" +
+                        if (this._throwException)
+                        {
+                            throw new SystemException("error msg:" +
                                                   (resultJson.ContainsKey("msg")
                                                       ? resultJson["msg"]
                                                       : "APP ID doesn't exist"));
+                        }
                     }
                     else if (code == -3)
                     {
-                        throw new SystemException("error msg:" +
+                        if (this._throwException)
+                        {
+                            throw new SystemException("error msg:" +
                                                   (resultJson.ContainsKey("msg")
                                                       ? resultJson["msg"]
                                                       : "invalid ip transmission"));
+                        }
                     }
                     else
                     {
-                        throw new SystemException("Unexpected response return code: " + code);
+                        if (this._throwException)
+                        {
+                            throw new SystemException("Unexpected response return code: " + code);
+                        }
                     }
                 }
             }
             catch (Exception e)
             {
                 Console.WriteLine(e + "\n  Cannot post message to " + _url);
-                throw;
             }
         }
 
@@ -534,56 +555,49 @@ namespace ThinkingData.Analytics
         }
     }
 
+    /// <summary>
+    /// Function is exactly the same as BatchConsumer
+    /// </summary>
     public class AsyncBatchConsumer : IConsumer
     {
-
         private const int MaxFlushBatchSize = 20;
         private const int DefaultTimeOutSecond = 30;
-
-        private readonly List<Dictionary<string, object>> _messageList;
-
-        private readonly IsoDateTimeConverter _timeConverter = new IsoDateTimeConverter
-        {
-            DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff"
-        };
-
-        private readonly string _url;
-        private readonly string _appId;
-        private readonly int _batchSize;
-        private readonly int _requestTimeoutMillisecond;
-        private readonly bool _throwException;
-        private readonly bool _compress;
-
-        private System.Threading.Semaphore _semaphore = new Semaphore(1, 1);
-        private EventWaitHandle _waitHandle = new AutoResetEvent(false);
-        private EventWaitHandle _requestDone = new AutoResetEvent(false);
-        private Thread _asyncThread;
+        private BatchConsumer _consumer;
 
         public AsyncBatchConsumer(string serverUrl, string appId) : this(serverUrl, appId, MaxFlushBatchSize,
             DefaultTimeOutSecond, false, true)
         {
         }
 
-        /**
-         * 数据是否需要压缩，compress 内网可设置 false
-         */
+        /// <summary>
+        /// init AsyncBatchConsumer
+        /// </summary>
+        /// <param name="serverUrl">serverUrl</param>
+        /// <param name="appId">appId</param>
+        /// <param name="compress">data compress or not</param>
         public AsyncBatchConsumer(string serverUrl, string appId, bool compress) : this(serverUrl, appId, MaxFlushBatchSize,
             DefaultTimeOutSecond, false, compress)
         {
         }
 
-        /**
-         * batchSize 每次flush到TA的数据条数，默认20条
-         */
+        /// <summary>
+        /// init AsyncBatchConsumer
+        /// </summary>
+        /// <param name="serverUrl">serverUrl</param>
+        /// <param name="appId">appId</param>
+        /// <param name="batchSize">flush event count each time</param>
         public AsyncBatchConsumer(string serverUrl, string appId, int batchSize) : this(serverUrl, appId, batchSize,
             DefaultTimeOutSecond)
         {
         }
 
-        /**
-         * batchSize 每次flush到TA的数据条数，默认20条
-         * requestTimeoutSecond 发送服务器请求时间设置，默认30s
-         */
+        /// <summary>
+        /// init AsyncBatchConsumer
+        /// </summary>
+        /// <param name="serverUrl">serverUrl</param>
+        /// <param name="appId">appId</param>
+        /// <param name="batchSize">flush event count each time</param>
+        /// <param name="requestTimeoutSecond">http timeout</param>
         public AsyncBatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond) : this(serverUrl,
             appId, batchSize, requestTimeoutSecond, false)
         {
@@ -592,217 +606,22 @@ namespace ThinkingData.Analytics
         public AsyncBatchConsumer(string serverUrl, string appId, int batchSize, int requestTimeoutSecond,
             bool throwException, bool compress = true)
         {
-            _messageList = new List<Dictionary<string, object>>();
-            var relativeUri = new Uri("/sync_server", UriKind.Relative);
-            _url = new Uri(new Uri(serverUrl), relativeUri).AbsoluteUri;
-            this._appId = appId;
-            this._batchSize = Math.Min(MaxFlushBatchSize, batchSize);
-            this._throwException = throwException;
-            this._compress = compress;
-            this._requestTimeoutMillisecond = requestTimeoutSecond * 1000;
-
-            StartAsyncThread();
-        }
-
-        private void StartAsyncThread()
-        {
-            _asyncThread = new Thread(() => {
-                while (true)
-                {
-                    if (_messageList.Count > 0)
-                    {
-                        _semaphore.WaitOne();
-                        AsyncFlush();
-                    }
-                    else
-                    {
-                        _waitHandle.WaitOne();
-                    }
-                }
-            });
-            _asyncThread.Start();
+            this._consumer = new BatchConsumer(serverUrl, appId, batchSize, requestTimeoutSecond, throwException, compress);
         }
 
         public void Send(Dictionary<string, object> message)
         {
-            lock (_messageList)
-            {
-                _messageList.Add(message);
-
-                TALogger.Log("添加到缓存");
-                
-                if (_messageList.Count >= _batchSize)
-                {
-                    Flush();
-                }
-            }
+            _consumer.Send(message);
         }
 
         public void Flush()
         {
-            _waitHandle.Set();
-        }
-
-        private void AsyncFlush()
-        {
-            lock (_messageList)
-            {
-                if (_messageList.Count != 0)
-                {
-                    var batchRecordCount = Math.Min(_batchSize, _messageList.Count);
-                    var batchList = _messageList.GetRange(0, batchRecordCount);
-                    string sendingData = null;
-                    try
-                    {
-                        sendingData = JsonConvert.SerializeObject(batchList, _timeConverter);
-                    }
-                    catch (Exception exception)
-                    {
-                        _messageList.RemoveRange(0, batchRecordCount);
-                        if (_throwException)
-                        {
-                            throw new SystemException("Failed to serialize data.", exception);
-                        }
-                    }
-
-                    SendToServer(sendingData);
-                    _messageList.RemoveRange(0, batchRecordCount);
-                }
-            }
-        }
-
-        private void onResponse(IAsyncResult asyncResult)
-        {
-            try
-            {
-                WebRequest webRequest = (WebRequest)asyncResult.AsyncState;
-                HttpWebResponse response = webRequest.EndGetResponse(asyncResult) as HttpWebResponse;
-                var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
-
-                TALogger.Log("收到返回值:\n{0}", responseString);
-
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw new SystemException("C# SDK send response is not 200, content: " + responseString);
-                }
-                response.Close();
-                var resultJson = JsonConvert.DeserializeObject<Dictionary<object, object>>(responseString);
-
-                int code = Convert.ToInt32(resultJson["code"]);
-
-                if (code != 0)
-                {
-                    if (code == -1)
-                    {
-                        throw new SystemException("error msg:" +
-                                                  (resultJson.ContainsKey("msg")
-                                                      ? resultJson["msg"]
-                                                      : "invalid data format"));
-                    }
-                    else if (code == -2)
-                    {
-                        throw new SystemException("error msg:" +
-                                                  (resultJson.ContainsKey("msg")
-                                                      ? resultJson["msg"]
-                                                      : "APP ID doesn't exist"));
-                    }
-                    else if (code == -3)
-                    {
-                        throw new SystemException("error msg:" +
-                                                  (resultJson.ContainsKey("msg")
-                                                      ? resultJson["msg"]
-                                                      : "invalid ip transmission"));
-                    }
-                    else
-                    {
-                        throw new SystemException("Unexpected response return code: " + code);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e + "\n [onResponse] Cannot post message to " + _url);
-            }
-            finally
-            {
-                _semaphore.Release();
-                if (_messageList.Count > 0)
-                {
-                    //还有数据，需要上报
-                    AsyncFlush();
-                }
-            }
-        }
-
-        private void onRequest(IAsyncResult asyncResult)
-        {
-            try
-            {
-                Dictionary<string, object> asyncState = asyncResult.AsyncState as Dictionary<string, object>;
-                WebRequest webRequest = asyncState["webRequest"] as WebRequest;
-
-                byte[] dataCompressed = asyncState["dataCompressed"] as byte[];
-                Stream stream = webRequest.EndGetRequestStream(asyncResult) as Stream;
-                stream.Write(dataCompressed, 0, dataCompressed.Length);
-                stream.Flush();
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e + "\n [onRequest] Cannot post message to " + _url);
-            }
-            finally
-            {
-                _requestDone.Set();
-            }
-        }
-
-        private void SendToServer(string dataStr)
-        {
-            try
-            {
-                var dataBytes = Encoding.UTF8.GetBytes(dataStr);
-                var dataCompressed = _compress ? Gzip(dataStr) : dataBytes;
-
-                TALogger.Log("发送数据:\n{0}", dataStr);
-
-                var request = (HttpWebRequest)WebRequest.Create(this._url);
-                request.Method = "POST";
-                request.ReadWriteTimeout = _requestTimeoutMillisecond;
-                request.Timeout = _requestTimeoutMillisecond;
-                request.UserAgent = "C# SDK";
-                request.Headers.Set("appid", _appId);
-                request.Headers.Set("compress", _compress ? "gzip" : "none");
-                request.ContentLength = dataCompressed.Length;
-
-                var webRequest = request as HttpWebRequest;
-                webRequest.BeginGetRequestStream(new AsyncCallback(onRequest), new Dictionary<string, object> {
-                    { "webRequest", webRequest},
-                    { "dataCompressed", dataCompressed} });
-                _requestDone.WaitOne();
-
-                webRequest.BeginGetResponse(new AsyncCallback(onResponse), webRequest);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e + "\n [SendToServer] Cannot post message to " + _url);
-                throw;
-            }
-        }
-
-        private static byte[] Gzip(string inputStr)
-        {
-            var inputBytes = Encoding.UTF8.GetBytes(inputStr);
-            using (var outputStream = new MemoryStream())
-            {
-                using (var gzipStream = new GZipStream(outputStream, CompressionMode.Compress))
-                    gzipStream.Write(inputBytes, 0, inputBytes.Length);
-                return outputStream.ToArray();
-            }
+            _consumer.Flush();
         }
 
         public void Close()
         {
-            Flush();
+            _consumer.Close();
         }
 
         public bool IsStrict()
@@ -811,7 +630,9 @@ namespace ThinkingData.Analytics
         }
     }
 
-    //逐条传输数据，如果发送失败则抛出异常
+    /// <summary>
+    /// The data is reported one by one, and when an error occurs, the exception will be throwed
+    /// </summary>
     public class DebugConsumer : IConsumer
     {
         private readonly string _url;
@@ -819,6 +640,7 @@ namespace ThinkingData.Analytics
         private readonly int _requestTimeout;
         private readonly bool _writeData;
         private readonly string _deviceId;
+        private readonly HttpClient _httpClient = new HttpClient();
 
         private readonly IsoDateTimeConverter _timeConverter = new IsoDateTimeConverter
             {DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff"};
@@ -848,6 +670,9 @@ namespace ThinkingData.Analytics
             this._writeData = writeData;
             this._deviceId = deviceId;
             TALogger.Enable = true;
+
+            _httpClient.Timeout = TimeSpan.FromMilliseconds(_requestTimeout);
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Content-Type", "application/x-www-form-urlencoded");
         }
 
         public void Send(Dictionary<string, object> message)
@@ -855,7 +680,7 @@ namespace ThinkingData.Analytics
             try
             {
                 var sendingData = JsonConvert.SerializeObject(message, _timeConverter);
-                TALogger.Log("发送数据:\n{0}", sendingData);
+                TALogger.Log("send request:\n{0}", sendingData);
                 SendToServer(sendingData);
             }
             catch (Exception exception)
@@ -864,57 +689,26 @@ namespace ThinkingData.Analytics
             }
         }
 
-
-        private void SendToServer(string dataStr)
+        private async void SendToServer(string dataStr)
         {
             try
             {
-                var req = (HttpWebRequest) WebRequest.Create(_url);
-
-                req.Method = "POST";
-
-                req.ContentType = "application/x-www-form-urlencoded";
-
-                var dryRun = 1;
-                if (_writeData)
-                {
-                    dryRun = 0;
-                }
-
-                var postData = "appid=" + _appId + "&source=server&dryRun=" + dryRun + "&data=" + dataStr;
+                List<KeyValuePair<string, string>> paramsList = new List<KeyValuePair<string, string>>() {
+                    new KeyValuePair<string, string>("appid", _appId),
+                    new KeyValuePair<string, string>("source", "server"),
+                    new KeyValuePair<string, string>("dryRun", (_writeData ? 0 : 1).ToString()),
+                    new KeyValuePair<string, string>("data", dataStr),
+                };
 
                 if (_deviceId != null)
                 {
-                    postData += "&deviceId=" + _deviceId;
+                    paramsList.Add(new KeyValuePair<string, string>("deviceId", _deviceId));
                 }
 
-                var data = Encoding.UTF8.GetBytes(postData);
-
-                req.ContentLength = data.Length;
-
-                using (var reqStream = req.GetRequestStream())
-                {
-                    reqStream.Write(data, 0, data.Length);
-
-                    reqStream.Close();
-                }
-
-                var response = (HttpWebResponse) req.GetResponse();
-
-                var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
-
-                TALogger.Log("收到返回值:\n{0}", responseString);
-
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw new SystemException("C# SDK send response is not 200, content: " + responseString);
-                }
-
-                response.Close();
+                var response = await _httpClient.PostAsync(_url, new FormUrlEncodedContent(paramsList));
+                var responseString = await response.Content.ReadAsStringAsync();
                 var resultJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(responseString);
-
                 var errorLevel = Convert.ToInt32(resultJson["errorLevel"]);
-
                 if (errorLevel != 0)
                 {
                     throw new Exception("\n Can't send because :\n" + responseString);
