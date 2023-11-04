@@ -465,71 +465,64 @@ namespace ThinkingData.Analytics
             }
         }
 
-        private async void SendToServer(string dataStr)
+        private void SendToServer(string dataStr)
         {
-            try
+            TALogger.Log("send request:\n{0}", dataStr);
+
+            byte[] dataBytes = _compress ? Gzip(dataStr) : Encoding.UTF8.GetBytes(dataStr);
+
+            var response = _httpClient.PostAsync(_url, new ByteArrayContent(dataBytes)).GetAwaiter().GetResult();
+            var responseString = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            TALogger.Log("response:\n{0}", responseString);
+
+            var resultJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(responseString);
+
+            if (response.StatusCode != HttpStatusCode.OK)
             {
-                TALogger.Log("send request:\n{0}", dataStr);
-
-                byte[] dataBytes = _compress ? Gzip(dataStr) : Encoding.UTF8.GetBytes(dataStr);
-
-                var response = await _httpClient.PostAsync(_url, new ByteArrayContent(dataBytes));
-                var responseString = await response.Content.ReadAsStringAsync();
-                TALogger.Log("response:\n{0}", responseString);
-
-                var resultJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(responseString);
-
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw new SystemException("C# SDK send response is not 200, content: " + responseString);
-                }
-
-                int code = Convert.ToInt32(resultJson["code"]);
-
-                if (code != 0)
-                {
-                    if (code == -1)
-                    {
-                        if (this._throwException)
-                        {
-                            throw new SystemException("error msg:" +
-                                                  (resultJson.ContainsKey("msg")
-                                                      ? resultJson["msg"]
-                                                      : "invalid data format"));
-                        }
-                    }
-                    else if (code == -2)
-                    {
-                        if (this._throwException)
-                        {
-                            throw new SystemException("error msg:" +
-                                                  (resultJson.ContainsKey("msg")
-                                                      ? resultJson["msg"]
-                                                      : "APP ID doesn't exist"));
-                        }
-                    }
-                    else if (code == -3)
-                    {
-                        if (this._throwException)
-                        {
-                            throw new SystemException("error msg:" +
-                                                  (resultJson.ContainsKey("msg")
-                                                      ? resultJson["msg"]
-                                                      : "invalid ip transmission"));
-                        }
-                    }
-                    else
-                    {
-                        if (this._throwException)
-                        {
-                            throw new SystemException("Unexpected response return code: " + code);
-                        }
-                    }
-                }
+                throw new SystemException("C# SDK send response is not 200, content: " + responseString);
             }
-            catch (Exception e)
+
+            int code = Convert.ToInt32(resultJson["code"]);
+
+            if (code != 0)
             {
-                Console.WriteLine(e + "\n  Cannot post message to " + _url);
+                if (code == -1)
+                {
+                    if (this._throwException)
+                    {
+                        throw new SystemException("error msg:" +
+                                              (resultJson.ContainsKey("msg")
+                                                  ? resultJson["msg"]
+                                                  : "invalid data format"));
+                    }
+                }
+                else if (code == -2)
+                {
+                    if (this._throwException)
+                    {
+                        throw new SystemException("error msg:" +
+                                              (resultJson.ContainsKey("msg")
+                                                  ? resultJson["msg"]
+                                                  : "APP ID doesn't exist"));
+                    }
+                }
+                else if (code == -3)
+                {
+                    if (this._throwException)
+                    {
+                        throw new SystemException("error msg:" +
+                                              (resultJson.ContainsKey("msg")
+                                                  ? resultJson["msg"]
+                                                  : "invalid ip transmission"));
+                    }
+                }
+                else
+                {
+                    if (this._throwException)
+                    {
+                        throw new SystemException("Unexpected response return code: " + code);
+                    }
+                }
             }
         }
 
